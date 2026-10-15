@@ -361,6 +361,23 @@ const Core = (() => {
     return { A: p.A, zc, yc, Iy, Iz, Iyz, WyTop: Iy / (zTop - zc), WyBot: Iy / zc, Wz: Iz / yMax };
   }
 
+  // Højde af effektivt materiale [zLo, zHi]. Ineffektive dele ved kanten (fx T-kroppens frie kant) flytter yderfiberen.
+  function extentZ(shapes, h) {
+    const A = sumProps(shapes).A, tol = 1e-9 * A, dz = 1e-4 * h, find = above => {
+      if (sumProps(shapes, [1, above ? h - dz : dz, above]).A > tol) return above ? h : 0; // materiale helt ud til kanten
+      let lo = 0, hi = h;
+      for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2, a = sumProps(shapes, [1, m, above]).A; if (above ? a > tol : a <= tol) lo = m; else hi = m; }
+      return (lo + hi) / 2;
+    };
+    return [find(false), find(true)];
+  }
+  // Effektive tværsnitskonstanter med W målt til det effektive materiales yderfibre
+  function effProps(shapes, h, yMax) {
+    const P = sectionProps(shapes, h, yMax), [zLo, zHi] = extentZ(shapes, h);
+    P.zLo = zLo; P.zHi = zHi; P.WyTop = P.Iy / (zHi - P.zc); P.WyBot = P.Iy / (P.zc - zLo);
+    return P;
+  }
+
   /* ---------- Tværsnit ---------- */
   function buildRolled(series, size) {
     const [h, b, tw, tf, r] = LIB[series][size];
@@ -679,7 +696,7 @@ const Core = (() => {
       const r = holesForUniform(e.el, eps); holes.push(...r.holes); det.push({ el: e.el, w: r.w });
     });
     const shapes = [...sec.shapes, ...holes.map(p => ({ pts: p, s: -1 }))];
-    const P = sectionProps(shapes, sec.h, sec.bmax / 2);
+    const P = effProps(shapes, sec.h, sec.bmax / 2);
     return { shapes, holes, det, A: P.A, zc: P.zc, eN: P.zc - G.zc, P };
   }
   // Effektivt tværsnit ved ren bøjning (Weff); sign = +1: tryk i overside
@@ -702,7 +719,7 @@ const Core = (() => {
     const zForPsi = zna;
     webRes.forEach(r => { if (r.w) det.push({ el: r.el, w: r.w, zna: zForPsi }); });
     const holes = [...flHoles, ...webRes.flatMap(r => r.holes)], shapes = mk(holes);
-    const P = sectionProps(shapes, sec.h, sec.bmax / 2);
+    const P = effProps(shapes, sec.h, sec.bmax / 2);
     return { shapes, holes, det, P, A: P.A, zc: P.zc, Iy: P.Iy, Wtop: P.WyTop, Wbot: P.WyBot, Wmin: Math.min(P.WyTop, P.WyBot), its, sign };
   }
 
@@ -906,22 +923,27 @@ function svgSection(res, eff) {
     if (eff) out += `<circle cx="${X(eff.yc)}" cy="${Y(eff.zc)}" r="3.2" style="fill:var(--k4)"/>`;
     out += `<circle cx="${X(yc)}" cy="${Y(zc)}" r="3.2" style="fill:var(--ink)"/>`;
   }
-  // spændingsdiagram (brutto, elastisk, kombineret)
-  const sT = res.NEd / G.A + res.MEd * (sec.h - G.zc) / G.Iy, sB = res.NEd / G.A - res.MEd * G.zc / G.Iy;
+  // spændingsdiagram (elastisk, kombineret). På effektivt tværsnit som i (6.44): N/A_eff + (M − N·e_N)/I_eff
+  const isEff = !!eff && sec.type !== 'angle', compN = res.NEd > 0 && res.effN;
+  const sA = isEff && compN ? res.effN.A : G.A, sE = isEff && compN ? res.effN.eN : 0, sM = res.MEd - res.NEd * sE;
+  const sI = isEff ? eff.P.Iy : G.Iy, sZ = isEff ? eff.P.zc : G.zc;
+  const zL = isEff ? eff.P.zLo : 0, zH = isEff ? eff.P.zHi : sec.h; // yderfibre i det viste tværsnit
+  const sT = res.NEd / sA + sM * (zH - sZ) / sI, sB = res.NEd / sA + sM * (zL - sZ) / sI;
   const x0 = 480, mx = Math.max(Math.abs(sT), Math.abs(sB), 1e-9), sc = 90 / mx;
   const SX = sg => x0 + sg * sc;
-  out += `<text x="${x0}" y="${top - 26}" text-anchor="middle" style="fill:var(--muted);font:600 11px var(--f-body)">σ<tspan dy="3" font-size="8">x,Ed</tspan><tspan dy="-3"> brutto, tryk +</tspan></text>`;
+  out += `<text x="${x0}" y="${top - 26}" text-anchor="middle" style="fill:var(--muted);font:600 11px var(--f-body)">σ<tspan dy="3" font-size="8">x,Ed</tspan><tspan dy="-3"> ${isEff ? 'effektivt' : 'brutto'}, tryk +</tspan></text>`;
+  if (isEff && Math.abs(res.NEd * sE) > 1e-6) out += `<text x="${x0}" y="${top - 12}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">inkl. N<tspan dy="3" font-size="8">Ed</tspan><tspan dy="-3">·e</tspan><tspan dy="3" font-size="8">N</tspan><tspan dy="-3"> = ${f(-res.NEd * sE / 1e6, 1)} kNm</tspan></text>`;
   const poly = (a, b) => { // a,b: [z, σ]
     const col = (a[1] + b[1]) / 2 >= 0 ? 'var(--comp)' : 'var(--tens)';
     return `<polygon points="${x0},${Y(a[0])} ${SX(a[1])},${Y(a[0])} ${SX(b[1])},${Y(b[0])} ${x0},${Y(b[0])}" style="fill:${col};fill-opacity:.18;stroke:${col};stroke-width:1.2"/>`;
   };
   if (Math.abs(sT) > 1e-9 || Math.abs(sB) > 1e-9) {
-    if (sT * sB < 0) { const zz = -sB * sec.h / (sT - sB); out += poly([0, sB], [zz, 0]) + poly([zz, 0], [sec.h, sT]); }
-    else out += poly([0, sB], [sec.h, sT]);
+    if (sT * sB < 0) { const zz = zL - sB * (zH - zL) / (sT - sB); out += poly([zL, sB], [zz, 0]) + poly([zz, 0], [zH, sT]); }
+    else out += poly([zL, sB], [zH, sT]);
   }
   out += `<line x1="${x0}" y1="${Y(sec.h) - 8}" x2="${x0}" y2="${Y(0) + 8}" style="stroke:var(--ink);stroke-width:1"/>`;
   const lab = (z, sg, dy) => `<text x="${sg >= 0 ? SX(sg) + 6 : SX(sg) - 6}" y="${Y(z) + dy}" text-anchor="${sg >= 0 ? 'start' : 'end'}" style="fill:var(--ink);font:11px var(--f-mono)">${f(sg, 0)}</text>`;
-  out += lab(sec.h, sT, 4) + lab(0, sB, 4);
+  out += lab(zH, sT, 4) + lab(zL, sB, 4);
   out += `<text x="${x0}" y="${Y(0) + 26}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
   return out + '</svg>';
 }
