@@ -296,12 +296,16 @@ const Core = (() => {
     return L;
   }
 
-  /* ---------- Materiale: EN 1993-1-1 tabel 3.1 (DK NA 3.2.1: valgmulighed a) ---------- */
-  const GRADES = { S235:[235,215], S275:[275,255], S355:[355,335], S420:[420,390], S450:[440,410], S460:[460,430] };
+  /* ---------- Materiale: f_y = R_eH fra produktstandarden (DK NA 3.2.1: valgmulighed a) ----------
+     EN 10025-2 (S235–S355, S450), EN 10025-3/-4 (S420, S460); hulprofiler EN 10210/10219 har samme trin.
+     Tykkelsestrin t ≤ 16, ≤ 40, ≤ 63, ≤ 80, ≤ 100 mm */
+  const FY_STEPS = [16, 40, 63, 80, 100];
+  const GRADES = { S235:[235,225,215,215,215], S275:[275,265,255,245,235], S355:[355,345,335,325,315], S420:[420,400,390,370,360], S450:[450,430,410,390,380], S460:[460,440,430,410,400] };
   function fyTable(grade, t) {
     const g = GRADES[grade]; if (!g) return null;
-    if (t <= 40) return g[0]; if (t <= 80) return g[1]; return null;
+    const i = FY_STEPS.findIndex(s => t <= s); return i < 0 ? null : g[i];
   }
+  function fyRange(t) { const i = FY_STEPS.findIndex(s => t <= s); return i < 0 ? null : i === 0 ? 't ≤ 16 mm' : `${FY_STEPS[i - 1]} < t ≤ ${FY_STEPS[i]} mm`; }
 
   /* ---------- DK NA: γM0 = 1,1·γ0·γ3 ---------- */
   function gammaM0({ situation, lk, cc, control }) {
@@ -805,7 +809,7 @@ const Core = (() => {
     return { sec, fy, eps, gM0, fyd, G, NEd, MEd, cN, cM, cC, effN, effMp, effMn, R, I };
   }
 
-  return { LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, gammaM0, buildRolled, buildRolledDims, buildWelded, buildTee, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, kSigmaOutstand, internalWidths, outstandWidths };
+  return { LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, fyRange, gammaM0, buildRolled, buildRolledDims, buildWelded, buildTee, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, kSigmaOutstand, internalWidths, outstandWidths };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
 </script>
@@ -899,7 +903,7 @@ function sideInfo(sec, fyT, fy, gm) {
   const tm = sec.tmax;
   $('fyInfo').innerHTML = $('fyMan').checked
     ? `f<sub>y</sub> = ${f(fy, 0)} MPa (manuel)`
-    : (fyT ? `t<sub>max</sub> = ${f(tm, 1)} mm → f<sub>y</sub> = ${f(fyT, 0)} MPa<br>EN 1993-1-1 tabel 3.1, ${tm <= 40 ? 't ≤ 40 mm' : '40 < t ≤ 80 mm'}` : `t<sub>max</sub> = ${f(tm, 1)} mm ligger uden for tabel 3.1. Angiv f<sub>y</sub> manuelt.`);
+    : (fyT ? `t<sub>max</sub> = ${f(tm, 1)} mm → f<sub>y</sub> = ${f(fyT, 0)} MPa<br>R<sub>eH</sub> efter produktstandard, ${Core.fyRange(tm)}` : `t<sub>max</sub> = ${f(tm, 1)} mm er over 100 mm. Angiv f<sub>y</sub> manuelt.`);
   $('gInfo').innerHTML = gm.g0 == null ? `γ<sub>M0</sub> = 1,00 (ulykke / seismisk)` :
     `γ<sub>M0</sub> = 1,1 · γ<sub>0</sub> · γ<sub>3</sub><br>= 1,1 · ${f(gm.g0, 2)} · ${f(gm.g3, 2)} = <b>${f(gm.g, 3)}</b>`;
 }
@@ -1002,7 +1006,7 @@ function render() {
   const fy = $('fyMan').checked ? num('fyVal') : fyT;
   const gm = Core.gammaM0({ situation: radio('sit'), lk: +$('lk').value, cc: $('cc').value, control: $('ctrl').value });
   sideInfo(sec, fyT, fy, gm);
-  if (!(fy > 0)) { out.innerHTML = `<div class="err"><b>Mangler f<sub>y</sub>:</b> godstykkelsen ${f(sec.tmax, 1)} mm ligger uden for EN 1993-1-1 tabel 3.1 (t ≤ 80 mm). Slå "Angiv f<sub>y</sub> manuelt" til og indtast værdien fra produktstandarden.</div>`; return; }
+  if (!(fy > 0)) { out.innerHTML = `<div class="err"><b>Mangler f<sub>y</sub>:</b> godstykkelsen ${f(sec.tmax, 1)} mm er over 100 mm, som programmets tabel dækker. Slå "Angiv f<sub>y</sub> manuelt" til og indtast værdien fra produktstandarden.</div>`; return; }
   const isL = sec.type === 'angle', NEd = num('NEd'), MEd = isL ? 0 : num('MEd');
   if (!isFinite(NEd) || !isFinite(MEd)) { out.innerHTML = `<div class="err"><b>Kan ikke beregne:</b> N<sub>Ed</sub> og M<sub>y,Ed</sub> skal være tal (brug 0 for ingen last).</div>`; return; }
   const res = Core.run(sec, { fy, gM0: gm.g, NEd: NEd * 1e3, MEd: MEd * 1e6, iterate: $('iter').checked });
@@ -1053,7 +1057,7 @@ function render() {
     h += `<section class="card"><h2>Serieoversigt · ${ovr.fam}${ovr.mfg ? (ovr.mfg === 'hot' ? ' varmformet' : ' koldformet') : ''} · ${$('fyMan').checked ? 'f<sub>y</sub> ' + f(num('fyVal'), 0) : $('grade').value}</h2>
       <p class="sub">${ovr.rows.length} standardstørrelser. ${isL ? `${n4} er i klasse 4 ved ren tryk${n4 ? `, heraf ${ovr.rows.filter(r => r.cN === 4 && r.aRatio < 1).length} med A<sub>eff</sub> < A` : ''}.` : `${n4} er i klasse 4 ved ren tryk og ${m4} ved ren bøjning; ${n3} har klasse 3 i mindst ét tilfælde.`} Vælg en række for at regne profilet.</p>
       <div class="tbl ovwrap"><table><thead><tr><th>Profil</th><th>f<sub>y</sub></th><th>maks c/t</th><th>Ren tryk</th><th>A<sub>eff</sub>/A</th><th>N<sub>c,Rd</sub> [kN]</th><th>Ren bøjning</th><th>W<sub>eff</sub>/W<sub>el</sub></th><th>M<sub>c,y,Rd</sub> [kNm]</th></tr></thead><tbody>
-      ${ovr.rows.map(r => r.na ? `<tr class="pick" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"><td>${r.p.key}</td><td colspan="8" class="na">Godstykkelse uden for tabel 3.1</td></tr>` :
+      ${ovr.rows.map(r => r.na ? `<tr class="pick" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"><td>${r.p.key}</td><td colspan="8" class="na">Godstykkelse over 100 mm</td></tr>` :
         `<tr class="pick${r.p.key === ovr.cur ? ' cur' : ''}" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"${r.p.key === ovr.cur ? ' aria-current="true"' : ''}><td>${r.p.key}</td><td class="num">${f(r.fy, 0)}</td><td class="num">${f(r.maxct, 1)}</td><td>${clsPill(r.cN)}</td><td class="num">${r.aRatio == null ? '–' : f(r.aRatio, 3)}</td><td class="num">${r.Nc == null ? '–' : f(r.Nc / 1e3, 0)}</td><td>${clsPill(r.cM)}</td><td class="num">${r.wRatio == null ? '–' : f(r.wRatio, 3)}</td><td class="num">${r.Mc == null ? '–' : f(r.Mc / 1e6, 1)}</td></tr>`).join('')}
       </tbody></table></div>
       <p class="hint" style="margin-top:8px">A<sub>eff</sub>/A og W<sub>eff</sub>/W<sub>el</sub> = 1 betyder fuldt effektivt. Bæreevner med γ<sub>M0</sub> = ${f(gm.g, 3)}${ovr.fam === 'CHS' ? '; klasse 4 rør kræver EN 1993-1-6' : ''}. Standardstørrelserne er typiske; kontrollér, at profilet kan leveres.</p></section>`;
@@ -1140,7 +1144,7 @@ function render() {
 
   // Forudsætninger
   h += `<section class="card"><h2>Forudsætninger</h2><p class="sub">Hvad programmet regner, og hvad det ikke dækker</p><ul class="notes">
-    <li>f<sub>y</sub> efter EN 1993-1-1 tabel 3.1 (DK NA 3.2.1: valgmulighed a), bestemt ud fra profilets største godstykkelse.</li>
+    <li>f<sub>y</sub> = R<sub>eH</sub> fra produktstandarden (DK NA 3.2.1: valgmulighed a): EN 10025-2 for S235–S355 og S450, EN 10025-3/-4 for S420 og S460, med tykkelsestrin 16, 40, 63, 80 og 100 mm. Hulprofiler efter EN 10210/10219 har samme værdier. f<sub>y</sub> bestemmes ud fra profilets største godstykkelse.</li>
     <li>γ<sub>M0</sub> = 1,1·γ<sub>0</sub>·γ<sub>3</sub> efter DS/EN 1993-1-1 DK NA:2019, 6.1(1). γ<sub>0</sub> = 1,0 for lastkombination 1–2, K<sub>FI</sub> for 3–4 og 1,2·K<sub>FI</sub> for 5. Ved ulykke og seismik er γ<sub>M0</sub> = 1,0.</li>
     <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
     <li>L-profiler: benene kontrolleres som udstående dele med c = ben − t − r<sub>1</sub>, og vinklen efter tabel 5.2 ark 3 (h/t ≤ 15ε og (b + h)/2t ≤ 11,5ε, ellers klasse 4). Ark 3 gælder ikke for vinkler i kontinuert kontakt med andre dele. Effektive bredder med b̄ = benlængden og k<sub>σ</sub> = 0,43. Kun normalkraft.</li>
