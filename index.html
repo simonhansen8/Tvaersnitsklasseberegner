@@ -538,6 +538,19 @@ const Core = (() => {
     return compTop ? mu - md : md - mu; // [mm³] gange fy
   }
 
+  // Plastisk nullinje ved forholdsvis last: (N, M) skaleres op til den plastiske interaktionskurve,
+  // så spændingsblokken svarer til det faktiske forhold M/N (ingen spring i klassen når M → 0)
+  function proportionalNA(sec, G, N, M, compTop) {
+    const target = Math.atan2(Math.abs(M), N), A = G.A;
+    const ang = z => {
+      const up = areaAbove(sec, z), Ac = compTop ? up : A - up;
+      return Math.atan2(Math.abs(plasticMoment(sec, z, G.zc, compTop)), 2 * Ac - A);
+    };
+    let lo = 0, hi = sec.h; const inc = ang(hi) > ang(lo); // vinklen er monoton i z
+    for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if ((ang(m) < target) === inc) lo = m; else hi = m; }
+    return (lo + hi) / 2;
+  }
+
   /* ---------- Spændingstilstand for klassifikation ---------- */
   function loadState(sec, G, fy, N, M) {
     const Npl = G.A * fy; // fy her = fy/γM0 (regningsmæssig plastisk tilstand)
@@ -545,7 +558,10 @@ const Core = (() => {
     let pl;
     if (Math.abs(M) < 1e-9) pl = N > 0 ? { all: 'comp' } : N < 0 ? { all: 'tens' } : { all: 'none' };
     else if (Math.abs(N) >= Npl) pl = N > 0 ? { all: 'comp' } : { all: 'tens' };
-    else { const compTop = M > 0; pl = { compTop, zp: plasticNA(sec, G.A, N / fy, compTop) }; }
+    else { const compTop = M > 0; const z0 = plasticNA(sec, G.A, N / fy, compTop);
+      // Forholdsvis last; aldrig mindre trykzone end med N_Ed alene (overbelastede tværsnit)
+      const zr = Math.abs(N) < 1e-9 ? z0 : proportionalNA(sec, G, N, M, compTop);
+      pl = { compTop, zp: compTop ? Math.min(z0, zr) : Math.max(z0, zr) }; }
     return { N, M, sig, pl, anyComp: N > 0 || Math.abs(M) > 1e-9 };
   }
   const plCompLen = (pl, zA, zB) => {
@@ -1126,7 +1142,7 @@ function render() {
   h += `<section class="card"><h2>Forudsætninger</h2><p class="sub">Hvad programmet regner, og hvad det ikke dækker</p><ul class="notes">
     <li>f<sub>y</sub> efter EN 1993-1-1 tabel 3.1 (DK NA 3.2.1: valgmulighed a), bestemt ud fra profilets største godstykkelse.</li>
     <li>γ<sub>M0</sub> = 1,1·γ<sub>0</sub>·γ<sub>3</sub> efter DS/EN 1993-1-1 DK NA:2019, 6.1(1). γ<sub>0</sub> = 1,0 for lastkombination 1–2, K<sub>FI</sub> for 3–4 og 1,2·K<sub>FI</sub> for 5. Ved ulykke og seismik er γ<sub>M0</sub> = 1,0.</li>
-    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
+    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
     <li>L-profiler: benene kontrolleres som udstående dele med c = ben − t − r<sub>1</sub>, og vinklen efter tabel 5.2 ark 3 (h/t ≤ 15ε og (b + h)/2t ≤ 11,5ε, ellers klasse 4). Ark 3 gælder ikke for vinkler i kontinuert kontakt med andre dele. Effektive bredder med b̄ = benlængden og k<sub>σ</sub> = 0,43. Kun normalkraft.</li>
     <li>Svejste T-profiler: kroppen er en udstående del (tabel 5.2 ark 2) med fri kant i underkant. Klasse 1–2 med 9ε/α og 10ε/α, når den frie kant er i tryk, ellers 9ε/(α√α) og 10ε/(α√α). Klasse 3 med 21ε√k<sub>σ</sub> (14ε ved ren tryk), og effektive bredder med k<sub>σ</sub> og ψ efter EN 1993-1-5 tabel 4.2.</li>
     <li>c-mål efter tabel 5.2. Valsede profiler: fradrag for rodradius r. Svejste profiler: fradrag √2·a for kantsvejs. RHS: c = h − 3t og b − 3t (konservativt).</li>
