@@ -1,0 +1,1090 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Tværsnitsklasse EC3</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..100,500..800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: værktøjsside – smal inputkolonne til venstre, beregningsrapport til højre (stables på telefon) */
+:root{
+  --bg:#EEF1F4; --surface:#FFFFFF; --sunk:#E3E8ED; --ink:#14202B; --muted:#56636F; --line:#CDD5DD;
+  --accent:#1C4F78; --accent-ink:#FFFFFF; --steel:#A9B6C2; --steel-edge:#3D4A56;
+  --k1:#2C7A4B; --k2:#3C7D8F; --k3:#A86A12; --k4:#B3261E;
+  --k1-bg:#E1F0E6; --k2-bg:#DDEDF1; --k3-bg:#F6EAD6; --k4-bg:#F8DFDC;
+  --comp:#B3261E; --tens:#1C4F78;
+  --f-display:"Archivo","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1318; --surface:#151C23; --sunk:#1C252E; --ink:#E3E9EF; --muted:#94A3B1; --line:#2A3540;
+  --accent:#7DB3E0; --accent-ink:#0E1318; --steel:#4E5D6B; --steel-edge:#AFC0CF;
+  --k1:#6CC48F; --k2:#6FC0D3; --k3:#E3A84A; --k4:#F0776D;
+  --k1-bg:#173225; --k2-bg:#15303A; --k3-bg:#3A2A10; --k4-bg:#3D1A17;
+  --comp:#F0776D; --tens:#7DB3E0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1318; --surface:#151C23; --sunk:#1C252E; --ink:#E3E9EF; --muted:#94A3B1; --line:#2A3540;
+  --accent:#7DB3E0; --accent-ink:#0E1318; --steel:#4E5D6B; --steel-edge:#AFC0CF;
+  --k1:#6CC48F; --k2:#6FC0D3; --k3:#E3A84A; --k4:#F0776D;
+  --k1-bg:#173225; --k2-bg:#15303A; --k3-bg:#3A2A10; --k4-bg:#3D1A17;
+  --comp:#F0776D; --tens:#7DB3E0; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.5}
+.wrap{max-width:1360px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px;padding-bottom:16px;border-bottom:2px solid var(--ink);margin-bottom:20px}
+h1{font-family:var(--f-display);font-stretch:78%;font-weight:800;font-size:clamp(28px,4vw,40px);line-height:1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.refs{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 14px}
+.layout{display:grid;grid-template-columns:330px minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
+aside.inputs{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:4px 16px 16px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100vh - 24px);overflow:auto}
+@media (max-width:900px){aside.inputs{position:static;max-height:none}}
+fieldset{border:0;margin:0;padding:14px 0 12px;border-bottom:1px solid var(--line);display:grid;gap:10px}
+fieldset:last-child{border-bottom:0}
+legend{font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:0;margin-bottom:2px;float:left;width:100%}
+label.f{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}
+label.f span.u{font-family:var(--f-mono);font-size:11px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+input[type=text],select{width:100%;font:inherit;font-family:var(--f-mono);font-size:13.5px;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:6px 8px;min-width:0}
+input[type=text]:focus,select:focus{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
+input[type=text]:disabled{opacity:.55}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);border-radius:5px;overflow:hidden}
+.seg.two{grid-template-columns:repeat(2,1fr)}
+.seg label{position:relative;text-align:center;font-size:12px;padding:7px 3px;cursor:pointer;border-left:1px solid var(--line);color:var(--ink);background:var(--bg);line-height:1.2}
+.seg label:first-child{border-left:0}
+.seg input{position:absolute;opacity:0;inset:0;cursor:pointer}
+.seg label:has(input:checked){background:var(--accent);color:var(--accent-ink);font-weight:600}
+.seg label:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:-3px}
+.chk{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--ink)}
+.chk input{margin-top:3px;accent-color:var(--accent)}
+.hint{font-size:11.5px;color:var(--muted);margin:0}
+.calc{font-family:var(--f-mono);font-size:12px;background:var(--sunk);border-radius:4px;padding:7px 9px;color:var(--ink)}
+
+main{display:grid;gap:20px;min-width:0}
+section.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 18px;min-width:0}
+h2{font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:17px;margin:0 0 2px;letter-spacing:.005em}
+.sub{color:var(--muted);font-size:12.5px;margin:0 0 12px}
+
+.summary{display:grid;grid-template-columns:auto minmax(0,1fr);gap:18px 26px;align-items:center}
+@media (max-width:620px){.summary{grid-template-columns:minmax(0,1fr)}}
+.badge{display:grid;place-items:center;width:150px;height:150px;border-radius:6px;border:2px solid currentColor;text-align:center;line-height:1}
+.badge .lbl{font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+.badge .num{font-family:var(--f-display);font-stretch:75%;font-weight:800;font-size:96px;margin-top:-6px}
+.badge .cap{font-size:11px;color:var(--muted);margin-top:-4px}
+.c1{color:var(--k1)} .c2{color:var(--k2)} .c3{color:var(--k3)} .c4{color:var(--k4)}
+.b1{background:var(--k1-bg)} .b2{background:var(--k2-bg)} .b3{background:var(--k3-bg)} .b4{background:var(--k4-bg)}
+.cases{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:480px){.cases{grid-template-columns:minmax(0,1fr)}}
+.case{border:1px solid var(--line);border-radius:5px;padding:8px 10px;display:grid;gap:2px}
+.case .t{font-size:11.5px;color:var(--muted)}
+.case .v{font-family:var(--f-display);font-stretch:80%;font-weight:800;font-size:22px}
+.kv{display:flex;flex-wrap:wrap;gap:6px 22px;margin-top:12px;font-family:var(--f-mono);font-size:12.5px}
+.kv b{font-weight:500;color:var(--muted);font-family:var(--f-body)}
+.util{margin-top:14px;display:grid;gap:5px}
+.util .bar{height:10px;background:var(--sunk);border-radius:5px;overflow:hidden}
+.util .bar i{display:block;height:100%;border-radius:5px}
+.util .txt{display:flex;justify-content:space-between;gap:10px;font-size:12.5px;flex-wrap:wrap}
+.util .txt strong{font-family:var(--f-mono);font-weight:500}
+.pill{display:inline-block;font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:12px;padding:2px 8px;border-radius:99px}
+
+.drawhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px}
+.views{display:flex;flex-wrap:wrap;gap:6px}
+.views button{font:inherit;font-size:12.5px;padding:5px 10px;border-radius:4px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+.views button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.views button:disabled{opacity:.4;cursor:not-allowed}
+.views button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.svgbox{overflow-x:auto;margin-top:10px}
+.svgbox svg{display:block;width:100%;max-width:640px;height:auto;margin:0 auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:12px;color:var(--muted);margin-top:6px;justify-content:center}
+.legend i{display:inline-block;width:14px;height:10px;margin-right:6px;vertical-align:-1px;border:1px solid var(--steel-edge)}
+
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:11.5px;border-bottom:1.5px solid var(--ink)}
+th:first-child,td:first-child{text-align:left}
+td.num{font-family:var(--f-mono)}
+td.hit{font-weight:600;box-shadow:inset 0 -2px 0 currentColor}
+td.na{color:var(--muted)}
+tr.grp td{background:var(--sunk);font-family:var(--f-display);font-stretch:85%;font-weight:700;text-align:left;font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.formula{font-family:var(--f-mono);font-size:12.5px;background:var(--sunk);border-radius:4px;padding:10px 12px;line-height:1.75;overflow-x:auto}
+.formula div{white-space:nowrap}
+.notes{margin:0;padding-left:18px;color:var(--muted);font-size:12.5px;display:grid;gap:5px;max-width:80ch}
+.err{border:1px solid var(--k4);background:var(--k4-bg);color:var(--ink);border-radius:6px;padding:12px 14px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px}
+sub{font-size:.75em}
+.ovwrap{max-height:420px;overflow:auto;border:1px solid var(--line);border-radius:4px}
+.ovwrap thead th{position:sticky;top:0;background:var(--surface);z-index:1}
+tr.pick{cursor:pointer}
+tr.pick:hover td{background:var(--sunk)}
+tr.pick:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+tr.cur td{background:var(--sunk);font-weight:600}
+tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+@media (prefers-reduced-motion:no-preference){.util .bar i{transition:width .25s ease}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>Tværsnitsklasse EC3</h1>
+  <div class="refs"><span>EN 1993-1-1 tabel 5.2</span><span>EN 1993-1-5 afsnit 4.4</span><span>DS/EN 1993-1-1 DK NA:2019</span></div>
+</header>
+
+<div class="layout">
+<aside class="inputs">
+  <form id="frm" autocomplete="off">
+  <fieldset>
+    <legend>Profiltype</legend>
+    <div class="seg" role="radiogroup" aria-label="Profiltype">
+      <label><input type="radio" name="typ" id="typ-rolled" value="rolled" checked>Valset I/H</label>
+      <label><input type="radio" name="typ" id="typ-welded" value="welded">Svejst I</label>
+      <label><input type="radio" name="typ" id="typ-rhs" value="rhs">RHS/SHS</label>
+      <label><input type="radio" name="typ" id="typ-chs" value="chs">CHS</label>
+      <label><input type="radio" name="typ" id="typ-angle" value="angle">L-profil</label>
+    </div>
+
+    <div id="g-rolled" style="display:grid;gap:10px">
+      <label class="f">Standardprofil<select id="rprof"></select></label>
+      <div class="row3">
+        <label class="f">h <span class="u">mm</span><input type="text" inputmode="decimal" id="ro_h"></label>
+        <label class="f">b <span class="u">mm</span><input type="text" inputmode="decimal" id="ro_b"></label>
+        <label class="f">r <span class="u">mm</span><input type="text" inputmode="decimal" id="ro_r"></label>
+        <label class="f">t<sub>w</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="ro_tw"></label>
+        <label class="f">t<sub>f</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="ro_tf"></label>
+      </div>
+      <p class="hint">Ret målene for at regne andre valsede serier, fx HEAA, IPE A eller UB/UC.</p>
+    </div>
+
+    <div id="g-welded" style="display:grid;gap:10px" hidden>
+      <div class="row2">
+        <label class="f">Højde h <span class="u">mm</span><input type="text" inputmode="decimal" id="w_h" value="1000"></label>
+        <label class="f">Krop t<sub>w</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="w_tw" value="8"></label>
+        <label class="f">Overflange b <span class="u">mm</span><input type="text" inputmode="decimal" id="w_bt" value="300"></label>
+        <label class="f">Overflange t<sub>f</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="w_tft" value="20"></label>
+        <label class="f">Underflange b <span class="u">mm</span><input type="text" inputmode="decimal" id="w_bb" value="300"></label>
+        <label class="f">Underflange t<sub>f</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="w_tfb" value="20"></label>
+        <label class="f">Kantsvejs a <span class="u">mm</span><input type="text" inputmode="decimal" id="w_a" value="5"></label>
+      </div>
+    </div>
+
+    <div id="g-rhs" style="display:grid;gap:10px" hidden>
+      <label class="f">Standardprofil<select id="hprof"></select></label>
+      <div class="row3">
+        <label class="f">h <span class="u">mm</span><input type="text" inputmode="decimal" id="r_h" value="200"></label>
+        <label class="f">b <span class="u">mm</span><input type="text" inputmode="decimal" id="r_b" value="200"></label>
+        <label class="f">t <span class="u">mm</span><input type="text" inputmode="decimal" id="r_t" value="5"></label>
+      </div>
+      <div class="seg two" role="radiogroup" aria-label="Fremstilling">
+        <label><input type="radio" name="mfg" id="mfg-hot" value="hot">Varmformet<br><small>EN 10210</small></label>
+        <label><input type="radio" name="mfg" id="mfg-cold" value="cold" checked>Koldformet<br><small>EN 10219</small></label>
+      </div>
+      <p class="hint" id="rhsR"></p>
+    </div>
+
+    <div id="g-angle" style="display:grid;gap:10px" hidden>
+      <label class="f">Standardprofil (EN 10056-1)<select id="lprof"></select></label>
+      <div class="row3">
+        <label class="f">h <span class="u">mm</span><input type="text" inputmode="decimal" id="l_h"></label>
+        <label class="f">b <span class="u">mm</span><input type="text" inputmode="decimal" id="l_b"></label>
+        <label class="f">t <span class="u">mm</span><input type="text" inputmode="decimal" id="l_t"></label>
+        <label class="f">r<sub>1</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="l_r1"></label>
+        <label class="f">r<sub>2</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="l_r2"></label>
+      </div>
+      <p class="hint">h er det lange ben. L-profiler regnes for normalkraft; M<sub>y,Ed</sub> indgår ikke.</p>
+    </div>
+
+    <div id="g-chs" style="display:grid;gap:10px" hidden>
+      <label class="f">Standardprofil<select id="cprof"></select></label>
+      <div class="row2">
+        <label class="f">Diameter d <span class="u">mm</span><input type="text" inputmode="decimal" id="c_d" value="508"></label>
+        <label class="f">Godstykkelse t <span class="u">mm</span><input type="text" inputmode="decimal" id="c_t" value="8"></label>
+      </div>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Materiale</legend>
+    <label class="f">Stålkvalitet<select id="grade"><option>S235</option><option>S275</option><option selected>S355</option><option>S420</option><option>S450</option><option>S460</option></select></label>
+    <label class="chk"><input type="checkbox" id="fyMan"> Angiv f<sub>y</sub> manuelt</label>
+    <label class="f" id="fyManBox" hidden>f<sub>y</sub> <span class="u">MPa</span><input type="text" inputmode="decimal" id="fyVal" value="355"></label>
+    <div class="calc" id="fyInfo"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Snitkræfter</legend>
+    <div class="row2">
+      <label class="f">N<sub>Ed</sub> <span class="u">kN, tryk +</span><input type="text" inputmode="decimal" id="NEd" value="1500"></label>
+      <label class="f">M<sub>y,Ed</sub> <span class="u">kNm, + = tryk i overside</span><input type="text" inputmode="decimal" id="MEd" value="40"></label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Partialkoefficient, DK NA</legend>
+    <div class="seg two" role="radiogroup" aria-label="Dimensioneringstilstand">
+      <label><input type="radio" name="sit" id="sit-v" value="vedvarende" checked>Vedvarende / midlertidig</label>
+      <label><input type="radio" name="sit" id="sit-u" value="ulykke">Ulykke / seismisk</label>
+    </div>
+    <div class="row2" id="naBox">
+      <label class="f">Lastkombination<select id="lk"><option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
+      <label class="f">Konsekvensklasse<select id="cc"><option value="CC1">CC1 (KFI = 0,9)</option><option value="CC2" selected>CC2 (KFI = 1,0)</option><option value="CC3">CC3 (KFI = 1,1)</option></select></label>
+      <label class="f" style="grid-column:1/-1">Kontrolklasse<select id="ctrl"><option value="normal" selected>Normal (γ3 = 1,00)</option><option value="skaerpet">Skærpet (γ3 = 0,95)</option></select></label>
+    </div>
+    <p class="hint" id="ctrlHint" hidden>Skærpet kontrolklasse må ikke bruges for byggeri omfattet af BR18 § 16, stk. 1.</p>
+    <div class="calc" id="gInfo"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Effektivt tværsnit</legend>
+    <label class="chk"><input type="checkbox" id="iter"> Iterér ψ for kroppen med det effektive tværsnits nullinje</label>
+    <p class="hint">Standard efter EN 1993-1-5, 4.4(3): ψ for kroppen bestemmes med effektiv trykflange og brutto krop.</p>
+  </fieldset>
+  </form>
+</aside>
+
+<main id="out" aria-live="polite"></main>
+</div>
+</div>
+<script>
+/* ===== Beregningskerne: EN 1993-1-1 tabel 5.2 + EN 1993-1-5 afsnit 4.4 + DK NA =====
+   Enheder internt: mm, N, Nmm, MPa. Fortegn: N > 0 er tryk, M > 0 giver tryk i oversiden. */
+const Core = (() => {
+  const SEG = 16, S2 = Math.SQRT2;
+
+  /* ---------- Profilbibliotek (h, b, tw, tf, r) ---------- */
+  const LIB = {
+    IPE: { 80:[80,46,3.8,5.2,5],100:[100,55,4.1,5.7,7],120:[120,64,4.4,6.3,7],140:[140,73,4.7,6.9,7],160:[160,82,5,7.4,9],180:[180,91,5.3,8,9],200:[200,100,5.6,8.5,12],220:[220,110,5.9,9.2,12],240:[240,120,6.2,9.8,15],270:[270,135,6.6,10.2,15],300:[300,150,7.1,10.7,15],330:[330,160,7.5,11.5,18],360:[360,170,8,12.7,18],400:[400,180,8.6,13.5,21],450:[450,190,9.4,14.6,21],500:[500,200,10.2,16,21],550:[550,210,11.1,17.2,24],600:[600,220,12,19,24] },
+    HEA: { 100:[96,100,5,8,12],120:[114,120,5,8,12],140:[133,140,5.5,8.5,12],160:[152,160,6,9,15],180:[171,180,6,9.5,15],200:[190,200,6.5,10,18],220:[210,220,7,11,18],240:[230,240,7.5,12,21],260:[250,260,7.5,12.5,24],280:[270,280,8,13,24],300:[290,300,8.5,14,27],320:[310,300,9,15.5,27],340:[330,300,9.5,16.5,27],360:[350,300,10,17.5,27],400:[390,300,11,19,27],450:[440,300,11.5,21,27],500:[490,300,12,23,27],550:[540,300,12.5,24,27],600:[590,300,13,25,27],650:[640,300,13.5,26,27],700:[690,300,14.5,27,27],800:[790,300,15,28,30],900:[890,300,16,30,30],1000:[990,300,16.5,31,30] },
+    HEB: { 100:[100,100,6,10,12],120:[120,120,6.5,11,12],140:[140,140,7,12,12],160:[160,160,8,13,15],180:[180,180,8.5,14,15],200:[200,200,9,15,18],220:[220,220,9.5,16,18],240:[240,240,10,17,21],260:[260,260,10,17.5,24],280:[280,280,10.5,18,24],300:[300,300,11,19,27],320:[320,300,11.5,20.5,27],340:[340,300,12,21.5,27],360:[360,300,12.5,22.5,27],400:[400,300,13.5,24,27],450:[450,300,14,26,27],500:[500,300,14.5,28,27],550:[550,300,15,29,27],600:[600,300,15.5,30,27],650:[650,300,16,31,27],700:[700,300,17,32,27],800:[800,300,17.5,33,30],900:[900,300,18.5,35,30],1000:[1000,300,19,36,30] },
+    HEM: { 100:[120,106,12,20,12],120:[140,126,12.5,21,12],140:[160,146,13,22,12],160:[180,166,14,23,15],180:[200,186,14.5,24,15],200:[220,206,15,25,18],220:[240,226,15.5,26,18],240:[270,248,18,32,21],260:[290,268,18,32.5,24],280:[310,288,18.5,33,24],300:[340,310,21,39,27],320:[359,309,21,40,27],340:[377,309,21,40,27],360:[395,308,21,40,27],400:[432,307,21,40,27],450:[478,307,21,40,27],500:[524,306,21,40,27],550:[572,306,21,40,27],600:[620,305,21,40,27],650:[668,305,21,40,27],700:[716,304,21,40,27],800:[814,303,21,40,30],900:[910,302,21,40,30],1000:[1008,302,21,40,30] }
+  };
+
+
+  /* ---------- Standard hulprofiler (typiske størrelser, EN 10210-2 / EN 10219-2) ---------- */
+  const HOLLOW = {
+    SHS: [[40,[2.5,3,4]],[50,[2.5,3,4,5]],[60,[3,4,5,6]],[70,[3,4,5,6]],[80,[3,4,5,6,8]],[90,[3,4,5,6,8]],[100,[3,4,5,6,8,10]],[120,[3,4,5,6,8,10]],[140,[4,5,6,8,10]],[150,[4,5,6,8,10,12.5]],[160,[4,5,6,8,10,12.5]],[180,[5,6,8,10,12.5]],[200,[5,6,8,10,12.5,16]],[220,[6,8,10,12.5,16]],[250,[6,8,10,12.5,16]],[260,[8,10,12.5,16]],[300,[6,8,10,12.5,16]],[350,[8,10,12.5,16]],[400,[8,10,12.5,16,20]]],
+    RHS: [[[50,30],[2.5,3,4]],[[60,40],[3,4,5]],[[80,40],[3,4,5]],[[100,50],[3,4,5,6]],[[100,60],[3,4,5,6]],[[120,60],[3,4,5,6]],[[120,80],[3,4,5,6,8]],[[140,80],[4,5,6,8]],[[150,100],[4,5,6,8,10]],[[160,80],[4,5,6,8]],[[180,100],[4,5,6,8,10]],[[200,100],[4,5,6,8,10]],[[200,120],[5,6,8,10]],[[250,150],[5,6,8,10,12.5]],[[300,100],[6,8,10]],[[300,200],[6,8,10,12.5,16]],[[400,200],[8,10,12.5,16]],[[450,250],[8,10,12.5,16]],[[500,300],[10,12.5,16,20]]],
+    CHS: [[33.7,[2.6,3.2,4]],[42.4,[2.6,3.2,4]],[48.3,[2.6,3.2,4,5]],[60.3,[2.9,3.2,4,5]],[76.1,[2.9,3.2,4,5,6.3]],[88.9,[3.2,4,5,6.3]],[114.3,[3.2,3.6,4,5,6.3]],[139.7,[4,5,6.3,8]],[168.3,[4,5,6.3,8,10]],[193.7,[5,6.3,8,10]],[219.1,[4.5,5,6.3,8,10,12.5]],[244.5,[5,6.3,8,10,12.5]],[273,[5,6.3,8,10,12.5]],[323.9,[5,6.3,8,10,12.5,16]],[355.6,[6.3,8,10,12.5,16]],[406.4,[6.3,8,10,12.5,16]],[457,[6.3,8,10,12.5,16]],[508,[6.3,8,10,12.5,16,20]],[610,[6.3,8,10,12.5,16,20]]]
+  };
+  // L-profiler EN 10056-1: [h, b, [t...], r1]; r2 = r1/2
+  const ANGLES = {
+    'L lige': [[20,20,[3],3.5],[25,25,[3,4],3.5],[30,30,[3,4],5],[35,35,[4],5],[40,40,[4,5],6],[45,45,[4.5],7],[50,50,[4,5,6],7],[60,60,[5,6,8],8],[65,65,[7],9],[70,70,[6,7],9],[75,75,[6,8],9],[80,80,[6,8,10],10],[90,90,[7,8,9,10],11],[100,100,[8,10,12],12],[120,120,[10,12],13],[130,130,[12],14],[150,150,[10,12,15],16],[160,160,[15],17],[180,180,[16,18],18],[200,200,[16,18,20,24],18],[250,250,[25,28,35],18]],
+    'L ulige': [[40,25,[4],4],[45,30,[4],4.5],[50,30,[5],5],[60,30,[5],5],[60,40,[5,6],6],[65,50,[5],6],[70,50,[6],7],[75,50,[6,8],7],[80,40,[6,8],7],[80,60,[7],8],[100,50,[6,8],8],[100,65,[7,8,10],10],[100,75,[8,10,12],10],[120,80,[8,10,12],11],[125,75,[8,10,12],11],[135,65,[8,10],11],[150,75,[9,10,12,15],12],[150,90,[10,12,15],12],[150,100,[10,12],12],[200,100,[10,12,15],15],[200,150,[12,15],15]]
+  };
+  const tx = t => String(t).replace('.', ',');
+  function catalog() {
+    const L = { rolled: [], SHS: [], RHS: [], CHS: [], L: [] };
+    for (const g in ANGLES) for (const [h, b, ts, r1] of ANGLES[g]) for (const t of ts) L.L.push({ key: `L ${h}×${b}×${tx(t)}`, group: g, dims: { h, b, t, r1, r2: r1 / 2 } });
+    for (const s in LIB) for (const z of Object.keys(LIB[s]).map(Number).sort((a, b) => a - b)) { const [h, b, tw, tf, r] = LIB[s][z]; L.rolled.push({ key: s + ' ' + z, group: s, dims: { h, b, tw, tf, r } }); }
+    for (const [b, ts] of HOLLOW.SHS) for (const t of ts) L.SHS.push({ key: `SHS ${b}×${b}×${tx(t)}`, group: 'SHS', dims: { h: b, b, t } });
+    for (const [[h, b], ts] of HOLLOW.RHS) for (const t of ts) L.RHS.push({ key: `RHS ${h}×${b}×${tx(t)}`, group: 'RHS', dims: { h, b, t } });
+    for (const [d, ts] of HOLLOW.CHS) for (const t of ts) L.CHS.push({ key: `CHS ${tx(d)}×${tx(t)}`, group: 'CHS', dims: { d, t } });
+    return L;
+  }
+
+  /* ---------- Materiale: EN 1993-1-1 tabel 3.1 (DK NA 3.2.1: valgmulighed a) ---------- */
+  const GRADES = { S235:[235,215], S275:[275,255], S355:[355,335], S420:[420,390], S450:[440,410], S460:[460,430] };
+  function fyTable(grade, t) {
+    const g = GRADES[grade]; if (!g) return null;
+    if (t <= 40) return g[0]; if (t <= 80) return g[1]; return null;
+  }
+
+  /* ---------- DK NA: γM0 = 1,1·γ0·γ3 ---------- */
+  function gammaM0({ situation, lk, cc, control }) {
+    if (situation === 'ulykke') return { g: 1.0, g0: null, g3: null, KFI: null };
+    const KFI = { CC1: 0.9, CC2: 1.0, CC3: 1.1 }[cc];
+    const g0 = [1.0, 1.0, KFI, KFI, 1.2 * KFI][lk - 1];
+    const g3 = control === 'skaerpet' ? 0.95 : 1.0;
+    return { g: 1.1 * g0 * g3, g0, g3, KFI };
+  }
+
+  /* ---------- Geometri ---------- */
+  function arcPts(cy, cz, r, a0, a1, n = SEG) {
+    const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push([cy + r * Math.cos(a), cz + r * Math.sin(a)]); } return p;
+  }
+  const rect = (y0, y1, z0, z1) => [[y0, z0], [y1, z0], [y1, z1], [y0, z1]];
+  function roundRect(b, h, r, zc) {
+    if (r <= 1e-9) return rect(-b / 2, b / 2, zc - h / 2, zc + h / 2);
+    const hb = b / 2 - r, hh = h / 2 - r, P = Math.PI;
+    return [...arcPts(hb, zc - hh, r, -P / 2, 0), ...arcPts(hb, zc + hh, r, 0, P / 2), ...arcPts(-hb, zc + hh, r, P / 2, P), ...arcPts(-hb, zc - hh, r, P, 1.5 * P)];
+  }
+  function circle(d, zc, n = 180) { const p = []; for (let i = 0; i < n; i++) { const a = 2 * Math.PI * i / n; p.push([d / 2 * Math.cos(a), zc + d / 2 * Math.sin(a)]); } return p; }
+
+  function polyProps(pts) {
+    let A = 0, Sz = 0, Sy = 0, Iz2 = 0, Iy2 = 0, Pyz = 0; const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const [y0, z0] = pts[i], [y1, z1] = pts[(i + 1) % n];
+      const c = y0 * z1 - y1 * z0;
+      A += c; Sz += (z0 + z1) * c; Sy += (y0 + y1) * c;
+      Iz2 += (z0 * z0 + z0 * z1 + z1 * z1) * c; Iy2 += (y0 * y0 + y0 * y1 + y1 * y1) * c;
+      Pyz += (y0 * z1 + 2 * y0 * z0 + 2 * y1 * z1 + y1 * z0) * c;
+    }
+    const s = A < 0 ? -1 : 1;
+    return { A: s * A / 2, Qz: s * Sz / 6, Qy: s * Sy / 6, Jzz: s * Iz2 / 12, Jyy: s * Iy2 / 12, Jyz: s * Pyz / 24 };
+  }
+  // Sutherland–Hodgman mod halvplan
+  function clip(pts, ax, v, keepGreater) {
+    const out = [], n = pts.length, ins = p => keepGreater ? p[ax] >= v : p[ax] <= v;
+    for (let i = 0; i < n; i++) {
+      const P = pts[i], Q = pts[(i + 1) % n], pi = ins(P), qi = ins(Q);
+      if (pi) out.push(P);
+      if (pi !== qi) { const t = (v - P[ax]) / (Q[ax] - P[ax]); out.push([P[0] + t * (Q[0] - P[0]), P[1] + t * (Q[1] - P[1])]); }
+    }
+    return out;
+  }
+  function sumProps(shapes, clipSpec) {
+    const r = { A: 0, Qz: 0, Qy: 0, Jzz: 0, Jyy: 0, Jyz: 0 };
+    for (const sh of shapes) {
+      let pts = sh.pts;
+      if (clipSpec) { pts = clip(pts, clipSpec[0], clipSpec[1], clipSpec[2]); if (pts.length < 3) continue; }
+      const p = polyProps(pts); for (const k in r) r[k] += sh.s * p[k];
+    }
+    return r;
+  }
+  function sectionProps(shapes, zTop, yMax) {
+    const p = sumProps(shapes), zc = p.Qz / p.A, yc = p.Qy / p.A;
+    const Iy = p.Jzz - p.A * zc * zc, Iz = p.Jyy - p.A * yc * yc, Iyz = p.Jyz - p.A * yc * zc;
+    return { A: p.A, zc, yc, Iy, Iz, Iyz, WyTop: Iy / (zTop - zc), WyBot: Iy / zc, Wz: Iz / yMax };
+  }
+
+  /* ---------- Tværsnit ---------- */
+  function buildRolled(series, size) {
+    const [h, b, tw, tf, r] = LIB[series][size];
+    return buildRolledDims({ name: series + ' ' + size, h, b, tw, tf, r });
+  }
+  function buildRolledDims({ name, h, b, tw, tf, r }) {
+    const P = Math.PI, pts = [];
+    pts.push([-b / 2, 0], [b / 2, 0], [b / 2, tf], [tw / 2 + r, tf]);
+    pts.push(...arcPts(tw / 2 + r, tf + r, r, -P / 2, -P).slice(1));
+    pts.push(...arcPts(tw / 2 + r, h - tf - r, r, P, P / 2));
+    pts.push([b / 2, h - tf], [b / 2, h], [-b / 2, h], [-b / 2, h - tf]);
+    pts.push(...arcPts(-tw / 2 - r, h - tf - r, r, P / 2, 0));
+    pts.push(...arcPts(-tw / 2 - r, tf + r, r, 0, -P / 2));
+    pts.push([-b / 2, tf]);
+    const cf = (b - tw - 2 * r) / 2, root = tw / 2 + r;
+    return {
+      type: 'rolled', name, h, bmax: b, tmax: Math.max(tw, tf), dims: { h, b, tw, tf, r },
+      shapes: [{ pts, s: 1 }],
+      elements: [
+        { id: 'web', label: 'Krop', kind: 'internal', orient: 'v', c: h - 2 * tf - 2 * r, t: tw, zA: tf + r, zB: h - tf - r, yRanges: [[-tw / 2, tw / 2]], cDef: 'c = h − 2t<sub>f</sub> − 2r' },
+        { id: 'ft', label: 'Overflange', kind: 'outstand', orient: 'h', side: 'top', c: cf, t: tf, zRange: [h - tf, h], roots: [root, -root], cDef: 'c = (b − t<sub>w</sub> − 2r)/2' },
+        { id: 'fb', label: 'Underflange', kind: 'outstand', orient: 'h', side: 'bot', c: cf, t: tf, zRange: [0, tf], roots: [root, -root], cDef: 'c = (b − t<sub>w</sub> − 2r)/2' }
+      ]
+    };
+  }
+  function buildWelded({ h, tw, bt, tft, bb, tfb, a }) {
+    const w = a * S2;
+    return {
+      type: 'welded', name: `Svejst I ${h}×${tw} / ${bt}×${tft} / ${bb}×${tfb}`, h, bmax: Math.max(bt, bb), tmax: Math.max(tw, tft, tfb),
+      dims: { h, tw, bt, tft, bb, tfb, a },
+      shapes: [{ pts: rect(-bb / 2, bb / 2, 0, tfb), s: 1 }, { pts: rect(-tw / 2, tw / 2, tfb, h - tft), s: 1 }, { pts: rect(-bt / 2, bt / 2, h - tft, h), s: 1 }],
+      elements: [
+        { id: 'web', label: 'Krop', kind: 'internal', orient: 'v', c: h - tft - tfb - 2 * w, t: tw, zA: tfb + w, zB: h - tft - w, yRanges: [[-tw / 2, tw / 2]], cDef: 'c = h<sub>w</sub> − 2√2·a' },
+        { id: 'ft', label: 'Overflange', kind: 'outstand', orient: 'h', side: 'top', c: (bt - tw) / 2 - w, t: tft, zRange: [h - tft, h], roots: [tw / 2 + w, -tw / 2 - w], cDef: 'c = (b − t<sub>w</sub>)/2 − √2·a' },
+        { id: 'fb', label: 'Underflange', kind: 'outstand', orient: 'h', side: 'bot', c: (bb - tw) / 2 - w, t: tfb, zRange: [0, tfb], roots: [tw / 2 + w, -tw / 2 - w], cDef: 'c = (b − t<sub>w</sub>)/2 − √2·a' }
+      ]
+    };
+  }
+  function rhsRadii(t, mfg) {
+    if (mfg === 'hot') return [1.5 * t, 1.0 * t];
+    const ro = t <= 6 ? 2 * t : t <= 10 ? 2.5 * t : 3 * t; return [ro, ro - t];
+  }
+  function buildRHS({ h, b, t, mfg, name }) {
+    const [ro, ri] = rhsRadii(t, mfg), cw = h - 3 * t, cf = b - 3 * t;
+    return {
+      type: 'rhs', name: `${name || (h === b ? 'SHS' : 'RHS') + ` ${h}×${b}×${t}`} (${mfg === 'hot' ? 'EN 10210' : 'EN 10219'})`, h, bmax: b, tmax: t,
+      dims: { h, b, t, ro, ri, mfg },
+      shapes: [{ pts: roundRect(b, h, ro, h / 2), s: 1 }, { pts: roundRect(b - 2 * t, h - 2 * t, ri, h / 2), s: -1 }],
+      elements: [
+        { id: 'web', label: 'Kroppe (sider)', kind: 'internal', orient: 'v', c: cw, t, zA: 1.5 * t, zB: h - 1.5 * t, yRanges: [[b / 2 - t, b / 2], [-b / 2, -b / 2 + t]], cDef: 'c = h − 3t' },
+        { id: 'ft', label: 'Overflange', kind: 'internal', orient: 'h', side: 'top', c: cf, t, zRange: [h - t, h], yA: -cf / 2, yB: cf / 2, cDef: 'c = b − 3t' },
+        { id: 'fb', label: 'Underflange', kind: 'internal', orient: 'h', side: 'bot', c: cf, t, zRange: [0, t], yA: -cf / 2, yB: cf / 2, cDef: 'c = b − 3t' }
+      ]
+    };
+  }
+  function buildCHS({ d, t, name }) {
+    return {
+      type: 'chs', name: name || `CHS ${d}×${t}`, h: d, bmax: d, tmax: t, dims: { d, t },
+      shapes: [{ pts: circle(d, d / 2), s: 1 }, { pts: circle(d - 2 * t, d / 2), s: -1 }],
+      elements: [{ id: 'chs', label: 'Rørvæg', kind: 'chs', c: d, t, cDef: 'd/t' }]
+    };
+  }
+
+
+  /* ---------- L-profiler ---------- */
+  // Lodret ben h, vandret ben b, hæl nederst til venstre; y forskudt så profilet er centreret om y = 0
+  function buildAngle({ h, b, t, r1, r2, name }) {
+    const P = Math.PI, o = -b / 2, pts = [];
+    pts.push([o, 0], [o + b, 0]);
+    if (r2 > 0) pts.push(...arcPts(o + b - r2, t - r2, r2, 0, P / 2)); else pts.push([o + b, t]);
+    if (r1 > 0) pts.push(...arcPts(o + t + r1, t + r1, r1, -P / 2, -P)); else pts.push([o + t, t]);
+    if (r2 > 0) pts.push(...arcPts(o + t - r2, h - r2, r2, 0, P / 2)); else pts.push([o + t, h]);
+    pts.push([o, h]);
+    const L = Math.max(h, b);
+    return {
+      type: 'angle', name: name || `L ${h}×${b}×${t}`, h, bmax: b, tmax: t, dims: { h, b, t, r1, r2, o },
+      shapes: [{ pts, s: 1 }],
+      elements: [
+        { id: 'legh', label: 'Ben h (lodret)', kind: 'outstand', orient: 'h', c: h - t - r1, t, zRange: [0, t], legLen: h, cDef: 'c = h − t − r<sub>1</sub>' },
+        { id: 'legb', label: 'Ben b (vandret)', kind: 'outstand', orient: 'h', c: b - t - r1, t, zRange: [0, t], legLen: b, cDef: 'c = b − t − r<sub>1</sub>' },
+        { id: 'a1', label: 'Vinkel: h/t', kind: 'angle', c: L, t, lim: 15, cDef: 'h/t ≤ 15ε' },
+        { id: 'a2', label: 'Vinkel: (b + h)/2t', kind: 'angle', c: (h + b) / 2, t, lim: 11.5, cDef: '(b + h)/2t ≤ 11,5ε' }
+      ]
+    };
+  }
+  function principal(P) {
+    const th = 0.5 * Math.atan2(-2 * P.Iyz, P.Iy - P.Iz), avg = (P.Iy + P.Iz) / 2, R = Math.hypot((P.Iy - P.Iz) / 2, P.Iyz);
+    return { thU: th, Iu: avg + R, Iv: avg - R };
+  }
+  // Elastisk modstandsmoment om akse gennem (yc,zc) med retning th
+  function wAbout(pts, yc, zc, th, I) {
+    let d = 0; for (const [y, z] of pts) d = Math.max(d, Math.abs(-Math.sin(th) * (y - yc) + Math.cos(th) * (z - zc)));
+    return I / d;
+  }
+  function inertiaAbout(P, th) { return P.Iy * Math.cos(th) ** 2 + P.Iz * Math.sin(th) ** 2 - 2 * P.Iyz * Math.sin(th) * Math.cos(th); }
+  function runAngle(sec, { fy, gM0, NEd }) {
+    const eps = Math.sqrt(235 / fy), fyd = fy / gM0, d = sec.dims, poly = sec.shapes[0].pts;
+    const G = sectionProps(sec.shapes, sec.h, sec.bmax / 2);
+    Object.assign(G, principal(G));
+    G.Wu = wAbout(poly, G.yc, G.zc, G.thU, G.Iu); G.Wv = wAbout(poly, G.yc, G.zc, G.thU + Math.PI / 2, G.Iv);
+    G.iv = Math.sqrt(G.Iv / G.A); G.Welmin = Math.min(G.Iy / Math.max(sec.h - G.zc, G.zc), 1e99);
+    const cN = classify(sec, G, fyd, eps, 1, 0), cC = classify(sec, G, fyd, eps, NEd, 0);
+    let effN = null;
+    if (cN.cls === 4) {
+      const wh = outstandWidths(d.h, d.t, eps), wb = outstandWidths(d.b, d.t, eps);
+      const zCut = wh.rho * d.h, yCut = d.o + wb.rho * d.b;
+      let eff = poly; if (wh.rho < 1) eff = clip(eff, 1, zCut, false); if (wb.rho < 1) eff = clip(eff, 0, yCut, false);
+      const holes = []; if (wh.rho < 1) holes.push(clip(poly, 1, zCut, true)); if (wb.rho < 1) holes.push(clip(poly, 0, yCut, true));
+      const shapes = [{ pts: eff, s: 1 }], P = sectionProps(shapes, sec.h, sec.bmax / 2);
+      const ey = P.yc - G.yc, ez = P.zc - G.zc, th = G.thU;
+      const eu = Math.cos(th) * ey + Math.sin(th) * ez, ev = -Math.sin(th) * ey + Math.cos(th) * ez;
+      const Iu = inertiaAbout(P, th), Iv = inertiaAbout(P, th + Math.PI / 2);
+      effN = { shapes, holes, P, A: P.A, zc: P.zc, yc: P.yc, eN: ez, eNy: ey, eu, ev, Iu, Iv,
+        Wu: wAbout(eff, P.yc, P.zc, th, Iu), Wv: wAbout(eff, P.yc, P.zc, th + Math.PI / 2, Iv),
+        det: [{ el: sec.elements[0], w: wh }, { el: sec.elements[1], w: wb }] };
+    }
+    const Npl = G.A * fyd, R = { Npl, NcRd: effN ? effN.A * fyd : Npl, McRd: null };
+    const I = { cls: cC.cls, terms: {} };
+    if (NEd <= 0) { I.method = NEd < 0 ? 'Træk, N<sub>pl,Rd</sub> (6.2.3)' : 'Ingen last'; I.util = Math.abs(NEd) / Npl; }
+    else if (!effN) { I.method = 'Tryk, N<sub>c,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub> (6.2.4)'; I.util = NEd / Npl; }
+    else {
+      const dMu = NEd * effN.ev, dMv = NEd * effN.eu; // moment om u fra forskydning vinkelret på u, og omvendt
+      const tN = NEd / (effN.A * fyd), tU = Math.abs(dMu) / (effN.Wu * fyd), tV = Math.abs(dMv) / (effN.Wv * fyd);
+      I.method = 'Effektivt tværsnit (6.2.9.3) med N<sub>Ed</sub>·e<sub>N</sub> om hovedakserne';
+      I.terms = { Aeff: effN.A, dMu, dMv, tN, tU, tV }; I.util = tN + tU + tV;
+    }
+    return { sec, fy, eps, gM0, fyd, G, NEd, MEd: 0, cN, cM: null, cC, effN, effMp: null, effMn: null, R, I };
+  }
+
+  /* ---------- Plastisk nullinje ---------- */
+  function areaAbove(sec, z) { return sumProps(sec.shapes, [1, z, true]).A; }
+  // compTop: tryk over nullinjen. Finder z så trykareal − trækareal = N/fy
+  function plasticNA(sec, A, Nfy, compTop) {
+    const target = (A + Nfy) / 2; // trykareal
+    let lo = 0, hi = sec.h;
+    for (let i = 0; i < 80; i++) {
+      const m = (lo + hi) / 2, comp = compTop ? areaAbove(sec, m) : A - areaAbove(sec, m);
+      if (compTop) { if (comp > target) lo = m; else hi = m; } else { if (comp > target) hi = m; else lo = m; }
+    }
+    return (lo + hi) / 2;
+  }
+  function plasticMoment(sec, zp, zc, compTop) {
+    const up = sumProps(sec.shapes, [1, zp, true]), dn = sumProps(sec.shapes, [1, zp, false]);
+    const mu = up.Qz - zc * up.A, md = dn.Qz - zc * dn.A;
+    return compTop ? mu - md : md - mu; // [mm³] gange fy
+  }
+
+  /* ---------- Spændingstilstand for klassifikation ---------- */
+  function loadState(sec, G, fy, N, M) {
+    const Npl = G.A * fy; // fy her = fy/γM0 (regningsmæssig plastisk tilstand)
+    const sig = z => N / G.A + M * (z - G.zc) / G.Iy;
+    let pl;
+    if (Math.abs(M) < 1e-9) pl = N > 0 ? { all: 'comp' } : N < 0 ? { all: 'tens' } : { all: 'none' };
+    else if (Math.abs(N) >= Npl) pl = N > 0 ? { all: 'comp' } : { all: 'tens' };
+    else { const compTop = M > 0; pl = { compTop, zp: plasticNA(sec, G.A, N / fy, compTop) }; }
+    return { N, M, sig, pl, anyComp: N > 0 || Math.abs(M) > 1e-9 };
+  }
+  const plCompLen = (pl, zA, zB) => {
+    const c = zB - zA;
+    if (pl.all === 'comp') return c; if (pl.all) return 0;
+    return pl.compTop ? Math.min(Math.max(zB - pl.zp, 0), c) : Math.min(Math.max(pl.zp - zA, 0), c);
+  };
+  const plCompH = (pl, z0, z1) => pl.all === 'comp' ? true : pl.all ? false : (pl.compTop ? z1 > pl.zp : z0 < pl.zp);
+
+  /* ---------- Tabel 5.2 ---------- */
+  function classifyElement(el, st, eps) {
+    const ratio = el.c / el.t, out = { el, ratio, alpha: null, psi: null, lims: null, cls: 1, note: '' };
+    if (el.kind === 'angle') {
+      if (!(st.N > 0)) { out.note = st.N < 0 ? 'Træk' : 'Intet tryk'; return out; }
+      out.lims = [null, null, el.lim * eps];
+      out.cls = ratio <= el.lim * eps + 1e-9 ? 1 : 4; out.pill = out.cls === 4 ? null : 'Opfyldt';
+      return out;
+    }
+    if (el.kind === 'chs') {
+      out.lims = [50 * eps * eps, 70 * eps * eps, 90 * eps * eps];
+      if (!st.anyComp) { out.note = 'Intet tryk'; out.lims = null; return out; }
+    } else if (el.orient === 'v') {
+      const sA = st.sig(el.zA), sB = st.sig(el.zB), s1 = Math.max(sA, sB), s2 = Math.min(sA, sB);
+      const alpha = plCompLen(st.pl, el.zA, el.zB) / el.c;
+      if (s1 <= 1e-9 && alpha <= 1e-9) { out.note = 'Intet tryk'; return out; }
+      const psi = s1 > 1e-9 ? s2 / s1 : null;
+      out.alpha = alpha; out.psi = psi;
+      const l1 = alpha <= 1e-9 ? Infinity : alpha > 0.5 ? 396 * eps / (13 * alpha - 1) : 36 * eps / alpha;
+      const l2 = alpha <= 1e-9 ? Infinity : alpha > 0.5 ? 456 * eps / (13 * alpha - 1) : 41.5 * eps / alpha;
+      const l3 = psi === null ? Infinity : psi > -1 ? 42 * eps / (0.67 + 0.33 * psi) : 62 * eps * (1 - psi) * Math.sqrt(-psi);
+      out.lims = [l1, l2, l3];
+      out.note = alpha >= 0.9999 && psi !== null && psi >= 0.9999 ? 'Tryk' : (alpha <= 0.5001 && alpha >= 0.4999 && psi !== null && Math.abs(psi + 1) < 1e-3 ? 'Bøjning' : 'Bøjning + tryk');
+    } else {
+      const comp = Math.max(st.sig(el.zRange[0]), st.sig(el.zRange[1])) > 1e-9 || plCompH(st.pl, el.zRange[0], el.zRange[1]);
+      if (!comp) { out.note = 'Træk'; return out; }
+      out.lims = el.kind === 'outstand' ? [9 * eps, 10 * eps, 14 * eps] : [33 * eps, 38 * eps, 42 * eps];
+      out.alpha = 1; out.psi = 1; out.note = 'Tryk';
+    }
+    const L = out.lims;
+    out.cls = ratio <= L[0] + 1e-9 ? 1 : ratio <= L[1] + 1e-9 ? 2 : ratio <= L[2] + 1e-9 ? 3 : 4;
+    return out;
+  }
+  function classify(sec, G, fy, eps, N, M) {
+    const st = loadState(sec, G, fy, N, M);
+    const els = sec.elements.map(el => classifyElement(el, st, eps));
+    return { st, els, cls: Math.max(1, ...els.map(e => e.cls)), active: st.anyComp };
+  }
+
+  /* ---------- EN 1993-1-5, tabel 4.1 og 4.2 ---------- */
+  function kSigmaInternal(psi) {
+    psi = Math.max(psi, -3);
+    if (psi >= 1) return 4.0;
+    if (psi > 0) return 8.2 / (1.05 + psi);
+    if (psi === 0) return 7.81;
+    if (psi > -1) return 7.81 - 6.29 * psi + 9.78 * psi * psi;
+    return 5.98 * (1 - psi) * (1 - psi);
+  }
+  function rhoInternal(lp, psi) {
+    psi = Math.max(psi, -3);
+    if (lp <= 0.5 + Math.sqrt(0.085 - 0.055 * psi)) return 1;
+    return Math.min(1, (lp - 0.055 * (3 + psi)) / (lp * lp));
+  }
+  function rhoOutstand(lp) { return lp <= 0.748 ? 1 : Math.min(1, (lp - 0.188) / (lp * lp)); }
+
+  // Effektiv bredde for indre del; s måles fra kanten med størst tryk (σ1)
+  function internalWidths(c, t, psi, eps) {
+    const k = kSigmaInternal(psi), lp = (c / t) / (28.4 * eps * Math.sqrt(k)), rho = rhoInternal(lp, psi);
+    let beff, be1, be2, bc, hole;
+    if (psi >= 0.9999) { bc = c; beff = rho * c; be1 = be2 = beff / 2; hole = [be1, c - be2]; }
+    else if (psi >= 0) { bc = c; beff = rho * c; be1 = 2 * beff / (5 - psi); be2 = beff - be1; hole = [be1, c - be2]; }
+    else { bc = c / (1 - psi); beff = rho * bc; be1 = 0.4 * beff; be2 = 0.6 * beff; hole = [be1, bc - be2]; }
+    return { psi, k, lp, rho, bc, beff, be1, be2, hole: hole[1] - hole[0] > 1e-9 ? hole : null };
+  }
+  function outstandWidths(c, t, eps) {
+    const k = 0.43, lp = (c / t) / (28.4 * eps * Math.sqrt(k)), rho = rhoOutstand(lp);
+    return { psi: 1, k, lp, rho, bc: c, beff: rho * c, be1: rho * c, be2: null, hole: rho < 1 ? [rho * c, c] : null };
+  }
+
+  function holesForUniform(el, eps) {
+    const holes = [];
+    if (el.orient === 'h' && el.kind === 'outstand') {
+      const w = outstandWidths(el.c, el.t, eps);
+      if (w.hole) for (const r of el.roots) { const d = Math.sign(r); holes.push(rect(Math.min(r + d * w.hole[0], r + d * w.hole[1]), Math.max(r + d * w.hole[0], r + d * w.hole[1]), el.zRange[0], el.zRange[1])); }
+      return { w, holes };
+    }
+    const w = internalWidths(el.c, el.t, 1, eps);
+    if (w.hole) {
+      if (el.orient === 'h') holes.push(rect(el.yA + w.hole[0], el.yA + w.hole[1], el.zRange[0], el.zRange[1]));
+      else for (const yr of el.yRanges) holes.push(rect(yr[0], yr[1], el.zB - w.hole[1], el.zB - w.hole[0]));
+    }
+    return { w, holes };
+  }
+  function holesForWeb(el, zna, sign, eps) {
+    const sA = sign * (el.zA - zna), sB = sign * (el.zB - zna);
+    const topComp = sB >= sA, s1 = Math.max(sA, sB), s2 = Math.min(sA, sB);
+    if (s1 <= 0) return { w: null, holes: [] };
+    const psi = s2 / s1, w = internalWidths(el.c, el.t, psi, eps), holes = [];
+    if (w.hole) for (const yr of el.yRanges) {
+      const z0 = topComp ? el.zB - w.hole[1] : el.zA + w.hole[0], z1 = topComp ? el.zB - w.hole[0] : el.zA + w.hole[1];
+      holes.push(rect(yr[0], yr[1], z0, z1));
+    }
+    w.topComp = topComp;
+    return { w, holes };
+  }
+
+  // Effektivt tværsnit ved ren tryk (Aeff, eN)
+  function effectiveCompression(sec, G, clsN, eps) {
+    const holes = [], det = [];
+    clsN.els.forEach(e => {
+      if (e.cls < 4 || e.el.kind === 'chs') return;
+      const r = holesForUniform(e.el, eps); holes.push(...r.holes); det.push({ el: e.el, w: r.w });
+    });
+    const shapes = [...sec.shapes, ...holes.map(p => ({ pts: p, s: -1 }))];
+    const P = sectionProps(shapes, sec.h, sec.bmax / 2);
+    return { shapes, holes, det, A: P.A, zc: P.zc, eN: P.zc - G.zc, P };
+  }
+  // Effektivt tværsnit ved ren bøjning (Weff); sign = +1: tryk i overside
+  function effectiveBending(sec, G, clsM, eps, sign, iterate) {
+    const flHoles = [], det = [], compSide = sign > 0 ? 'top' : 'bot';
+    let webs = [];
+    clsM.els.forEach(e => {
+      if (e.cls < 4 || e.el.kind === 'chs') return;
+      if (e.el.orient === 'h' && e.el.side === compSide) { const r = holesForUniform(e.el, eps); flHoles.push(...r.holes); det.push({ el: e.el, w: r.w }); }
+      else if (e.el.orient === 'v') webs.push(e.el);
+    });
+    const mk = hs => [...sec.shapes, ...hs.map(p => ({ pts: p, s: -1 }))];
+    let zna = sectionProps(mk(flHoles), sec.h, sec.bmax / 2).zc, webRes = [], its = 0;
+    for (;;) {
+      webRes = webs.map(el => ({ el, ...holesForWeb(el, zna, sign, eps) }));
+      if (!iterate) break;
+      const zn = sectionProps(mk([...flHoles, ...webRes.flatMap(r => r.holes)]), sec.h, sec.bmax / 2).zc;
+      its++; if (Math.abs(zn - zna) < 1e-4 || its > 50) { zna = zn; break; } zna = zn;
+    }
+    const zForPsi = zna;
+    webRes.forEach(r => { if (r.w) det.push({ el: r.el, w: r.w, zna: zForPsi }); });
+    const holes = [...flHoles, ...webRes.flatMap(r => r.holes)], shapes = mk(holes);
+    const P = sectionProps(shapes, sec.h, sec.bmax / 2);
+    return { shapes, holes, det, P, A: P.A, zc: P.zc, Iy: P.Iy, Wtop: P.WyTop, Wbot: P.WyBot, Wmin: Math.min(P.WyTop, P.WyBot), its, sign };
+  }
+
+  /* ---------- Hovedberegning ---------- */
+  function run(sec, opts) {
+    if (sec.type === 'angle') return runAngle(sec, opts);
+    const { fy, gM0, NEd, MEd, iterate } = opts; // NEd [N], MEd [Nmm]
+    const eps = Math.sqrt(235 / fy), fyd = fy / gM0;
+    const G = sectionProps(sec.shapes, sec.h, sec.bmax / 2);
+    const right = sumProps(sec.shapes, [0, 0, true]);
+    const zpl0 = plasticNA(sec, G.A, 0, true);
+    G.Wpl = plasticMoment(sec, zpl0, G.zc, true); G.Wplz = 2 * right.Qy; G.Welmin = Math.min(G.WyTop, G.WyBot); G.zpl = zpl0;
+    const mSign = MEd < 0 ? -1 : 1;
+    const cN = classify(sec, G, fyd, eps, 1, 0);
+    const cM = classify(sec, G, fyd, eps, 0, mSign);
+    const cC = classify(sec, G, fyd, eps, NEd, MEd);
+    const cMp = classify(sec, G, fyd, eps, 0, 1), cMn = classify(sec, G, fyd, eps, 0, -1);
+    const isCHS = sec.type === 'chs';
+    const effN = cN.cls === 4 && !isCHS ? effectiveCompression(sec, G, cN, eps) : null;
+    const effMp = !isCHS && cMp.cls === 4 ? effectiveBending(sec, G, cMp, eps, 1, iterate) : null;
+    const effMn = !isCHS && cMn.cls === 4 ? effectiveBending(sec, G, cMn, eps, -1, iterate) : null;
+
+    // Bæreevner
+    const Npl = G.A * fyd;
+    const R = { Npl, NcRd: cN.cls === 4 ? (effN ? effN.A * fyd : null) : Npl };
+    const Wb = cM.cls <= 2 ? G.Wpl : cM.cls === 3 ? G.Welmin : (mSign > 0 ? effMp : effMn)?.Wmin ?? null;
+    R.McRd = Wb ? Wb * fyd : null; R.Wbasis = cM.cls <= 2 ? 'W<sub>pl,y</sub>' : cM.cls === 3 ? 'W<sub>el,y,min</sub>' : 'W<sub>eff,y,min</sub>';
+
+    // Interaktion efter kombineret klasse
+    const k = cC.cls, I = { cls: k, method: '', util: null, terms: {} };
+    if (isCHS && k === 4) { I.method = 'Klasse 4 rør: EN 1993-1-6'; }
+    else if (!cC.active && NEd === 0) { I.method = 'Ingen last'; I.util = 0; }
+    else if (k <= 2) {
+      const n = Math.abs(NEd) / Npl, Mpl = G.Wpl * fyd, d = sec.dims;
+      const dsym = sec.type === 'rolled' || (sec.type === 'welded' && d.bt === d.bb && d.tft === d.tfb);
+      if (n >= 1) { I.method = 'Normalkraft overskrider N<sub>pl,Rd</sub>'; I.util = n; I.terms = { n }; }
+      else if (dsym) {
+        const b = sec.type === 'rolled' ? d.b : d.bt, tf = sec.type === 'rolled' ? d.tf : d.tft, tw = d.tw;
+        const hw = sec.h - 2 * tf, a = Math.min((G.A - 2 * b * tf) / G.A, 0.5);
+        const noRed = Math.abs(NEd) <= 0.25 * Npl && Math.abs(NEd) <= 0.5 * hw * tw * fyd;
+        const MN = noRed ? Mpl : Math.min(Mpl, Mpl * (1 - n) / (1 - 0.5 * a));
+        I.method = noRed ? 'Plastisk, (6.33)–(6.34) opfyldt: ingen reduktion' : 'Plastisk, reduceret moment (6.36)';
+        I.terms = { n, a, MNRd: MN, noRed }; I.util = Math.max(Math.abs(MEd) / MN, n);
+      } else if (sec.type === 'rhs') {
+        const aw = Math.min((G.A - 2 * d.b * d.t) / G.A, 0.5), MN = Math.min(Mpl, Mpl * (1 - n) / (1 - 0.5 * aw));
+        I.method = 'Plastisk, reduceret moment (6.39)'; I.terms = { n, a: aw, MNRd: MN }; I.util = Math.max(Math.abs(MEd) / MN, n);
+      } else {
+        const compTop = MEd >= 0, zp = plasticNA(sec, G.A, NEd / fyd, compTop);
+        const MN = Math.abs(plasticMoment(sec, zp, G.zc, compTop)) * fyd;
+        I.method = 'Plastisk, eksakt spændingsblok (6.2.9.1(2))';
+        I.terms = { n, MNRd: MN, zp }; I.util = Math.max(Math.abs(MEd) / MN, n);
+      }
+    } else if (k === 3) {
+      I.method = 'Elastisk spændingskontrol (6.2.9.2)';
+      const sT = NEd / G.A + MEd * (sec.h - G.zc) / G.Iy, sB = NEd / G.A - MEd * G.zc / G.Iy;
+      I.terms = { sT, sB }; I.util = Math.max(Math.abs(sT), Math.abs(sB)) / fyd;
+    } else {
+      I.method = 'Effektivt tværsnit (6.2.9.3, ligning 6.44)';
+      const comp = NEd > 0 && effN;
+      const Aeff = comp ? effN.A : G.A, eN = comp ? effN.eN : 0;
+      const Mtot = MEd - NEd * eN;
+      const effM = Mtot >= 0 ? effMp : effMn;
+      const W = effM ? effM.Wmin : G.Welmin;
+      I.terms = { Aeff, eN, dM: -NEd * eN, Mtot, Weff: W, tN: Math.abs(NEd) / (Aeff * fyd), tM: Math.abs(Mtot) / (W * fyd) };
+      I.util = I.terms.tN + I.terms.tM;
+    }
+    return { sec, fy, eps, gM0, fyd, G, NEd, MEd, cN, cM, cC, effN, effMp, effMn, R, I };
+  }
+
+  return { LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, gammaM0, buildRolled, buildRolledDims, buildWelded, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, internalWidths, outstandWidths };
+})();
+if (typeof module !== 'undefined') module.exports = Core;
+</script>
+<script>
+
+(() => {
+const $ = id => document.getElementById(id);
+const num = id => parseFloat(String($(id).value).replace(/\s/g, '').replace(',', '.'));
+const f = (x, d = 1) => (x == null || !isFinite(x)) ? '–' : x.toLocaleString('da-DK', { minimumFractionDigits: d, maximumFractionDigits: d });
+const typ = () => document.querySelector('input[name=typ]:checked').value;
+const radio = n => document.querySelector(`input[name=${n}]:checked`).value;
+let view = 'G';
+
+/* ---------- Standardprofiler ---------- */
+const CAT = Core.catalog();
+const PRESET = { // select-id → [liste, felter (mm)]
+  rprof: { list: CAT.rolled, fields: { h: 'ro_h', b: 'ro_b', tw: 'ro_tw', tf: 'ro_tf', r: 'ro_r' } },
+  hprof: { list: [...CAT.SHS, ...CAT.RHS], fields: { h: 'r_h', b: 'r_b', t: 'r_t' } },
+  cprof: { list: CAT.CHS, fields: { d: 'c_d', t: 'c_t' } },
+  lprof: { list: CAT.L, fields: { h: 'l_h', b: 'l_b', t: 'l_t', r1: 'l_r1', r2: 'l_r2' } }
+};
+function fillPresetSelect(id) {
+  const groups = {};
+  PRESET[id].list.forEach(p => (groups[p.group] ||= []).push(p));
+  $(id).innerHTML = Object.entries(groups).map(([g, ps]) => `<optgroup label="${g}">${ps.map(p => `<option value="${p.key}">${p.key}</option>`).join('')}</optgroup>`).join('') + '<option value="custom">Brugerdefinerede mål</option>';
+}
+function applyPreset(id, key) {
+  const p = PRESET[id].list.find(x => x.key === key); if (!p) return;
+  for (const [k, fid] of Object.entries(PRESET[id].fields)) $(fid).value = String(p.dims[k]).replace('.', ',');
+  $(id).value = key;
+}
+function matchPreset(id) {
+  const fl = PRESET[id].fields;
+  const p = PRESET[id].list.find(x => Object.entries(fl).every(([k, fid]) => Math.abs(num(fid) - x.dims[k]) < 1e-9));
+  $(id).value = p ? p.key : 'custom';
+  return p || null;
+}
+
+function need(cond, msg) { if (!cond) throw new Error(msg); }
+function buildSection() {
+  const t = typ();
+  if (t === 'rolled') {
+    const p = { h: num('ro_h'), b: num('ro_b'), tw: num('ro_tw'), tf: num('ro_tf'), r: num('ro_r') };
+    need(['h', 'b', 'tw', 'tf'].every(k => p[k] > 0) && p.r >= 0, 'h, b, t<sub>w</sub> og t<sub>f</sub> skal være positive, og r skal være 0 eller større.');
+    need(p.h > 2 * p.tf + 2 * p.r, 'h skal være større end 2t<sub>f</sub> + 2r.');
+    need(p.b > p.tw + 2 * p.r, 'b skal være større end t<sub>w</sub> + 2r.');
+    const m = matchPreset('rprof');
+    return Core.buildRolledDims({ name: m ? m.key : `Valset I ${f(p.h, 0)}×${f(p.b, 0)}×${f(p.tw, 1)}×${f(p.tf, 1)}`, ...p });
+  }
+  if (t === 'welded') {
+    const p = { h: num('w_h'), tw: num('w_tw'), bt: num('w_bt'), tft: num('w_tft'), bb: num('w_bb'), tfb: num('w_tfb'), a: num('w_a') };
+    need(['h', 'tw', 'bt', 'tft', 'bb', 'tfb'].every(k => p[k] > 0), 'Alle pladedimensioner skal være positive tal.');
+    need(p.a >= 0, 'Kantsvejsens a-mål skal være 0 eller større.');
+    need(p.tft + p.tfb + 2 * Math.SQRT2 * p.a < p.h, 'Flangetykkelser og svejsninger fylder mere end profilhøjden.');
+    need(p.bt > p.tw + 2 * Math.SQRT2 * p.a && p.bb > p.tw + 2 * Math.SQRT2 * p.a, 'Flangebredden skal være større end t<sub>w</sub> + 2√2·a.');
+    return Core.buildWelded(p);
+  }
+  if (t === 'rhs') {
+    const p = { h: num('r_h'), b: num('r_b'), t: num('r_t'), mfg: radio('mfg') };
+    need(p.h > 0 && p.b > 0 && p.t > 0, 'h, b og t skal være positive tal.');
+    need(p.b > 3 * p.t && p.h > 3 * p.t, 'Både h og b skal være større end 3t.');
+    const [ro, ri] = Core.rhsRadii(p.t, p.mfg);
+    $('rhsR').innerHTML = `Hjørneradier: r<sub>o</sub> = ${f(ro, 1)} mm, r<sub>i</sub> = ${f(ri, 1)} mm (${p.mfg === 'hot' ? 'EN 10210-2' : 'EN 10219-2'}). c = h − 3t og b − 3t.`;
+    const m = matchPreset('hprof');
+    return Core.buildRHS({ ...p, name: m ? m.key : null });
+  }
+  if (t === 'angle') {
+    const p = { h: num('l_h'), b: num('l_b'), t: num('l_t'), r1: num('l_r1'), r2: num('l_r2') };
+    need(p.h > 0 && p.b > 0 && p.t > 0 && p.r1 >= 0 && p.r2 >= 0, 'h, b og t skal være positive, og radierne 0 eller større.');
+    need(p.h >= p.b, 'h skal være det længste ben (h ≥ b).');
+    need(p.b > p.t + p.r1, 'b skal være større end t + r<sub>1</sub>.');
+    need(p.r2 <= p.t, 'r<sub>2</sub> kan ikke være større end t.');
+    const m = matchPreset('lprof');
+    return Core.buildAngle({ ...p, name: m ? m.key : null });
+  }
+  const p = { d: num('c_d'), t: num('c_t') };
+  need(p.d > 0 && p.t > 0 && 2 * p.t < p.d, 'd og t skal være positive, og 2t < d.');
+  const m = matchPreset('cprof');
+  return Core.buildCHS({ ...p, name: m ? m.key : null });
+}
+
+function sideInfo(sec, fyT, fy, gm) {
+  const tm = sec.tmax;
+  $('fyInfo').innerHTML = $('fyMan').checked
+    ? `f<sub>y</sub> = ${f(fy, 0)} MPa (manuel)`
+    : (fyT ? `t<sub>max</sub> = ${f(tm, 1)} mm → f<sub>y</sub> = ${f(fyT, 0)} MPa<br>EN 1993-1-1 tabel 3.1, ${tm <= 40 ? 't ≤ 40 mm' : '40 < t ≤ 80 mm'}` : `t<sub>max</sub> = ${f(tm, 1)} mm ligger uden for tabel 3.1. Angiv f<sub>y</sub> manuelt.`);
+  $('gInfo').innerHTML = gm.g0 == null ? `γ<sub>M0</sub> = 1,00 (ulykke / seismisk)` :
+    `γ<sub>M0</sub> = 1,1 · γ<sub>0</sub> · γ<sub>3</sub><br>= 1,1 · ${f(gm.g0, 2)} · ${f(gm.g3, 2)} = <b>${f(gm.g, 3)}</b>`;
+}
+
+/* ---------- Tegning ---------- */
+function pathOf(pts, X, Y) { return 'M' + pts.map(p => X(p[0]).toFixed(2) + ',' + Y(p[1]).toFixed(2)).join('L') + 'Z'; }
+function svgSection(res, eff) {
+  const sec = res.sec, G = res.G, W = 640, H = 430, top = 46, bot = 40, secH = H - top - bot;
+  const s = Math.min(250 / sec.bmax, secH / sec.h), cx = 200, z0 = top + (secH - sec.h * s) / 2;
+  const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
+  let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tværsnit ${sec.name}">
+  <defs><pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" style="fill:var(--surface)"/><line x1="0" y1="0" x2="0" y2="5" style="stroke:var(--k4);stroke-width:2.2"/></pattern></defs>`;
+  out += `<path d="${sec.shapes.map(sh => pathOf(sh.pts, X, Y)).join('')}" fill-rule="evenodd" style="fill:var(--steel);stroke:var(--steel-edge);stroke-width:1"/>`;
+  if (eff) for (const hpts of eff.holes) out += `<path d="${pathOf(hpts, X, Y)}" style="fill:url(#hatch);stroke:var(--k4);stroke-width:1.4"/>`;
+  // dimensioner
+  const xl = X(-sec.bmax / 2) - 34, yt = Y(sec.h) - 18;
+  out += `<g style="stroke:var(--muted);stroke-width:.8;fill:none"><line x1="${xl}" y1="${Y(sec.h)}" x2="${xl}" y2="${Y(0)}"/><line x1="${xl - 4}" y1="${Y(sec.h)}" x2="${xl + 4}" y2="${Y(sec.h)}"/><line x1="${xl - 4}" y1="${Y(0)}" x2="${xl + 4}" y2="${Y(0)}"/>
+    <line x1="${X(-sec.bmax / 2)}" y1="${yt}" x2="${X(sec.bmax / 2)}" y2="${yt}"/><line x1="${X(-sec.bmax / 2)}" y1="${yt - 4}" x2="${X(-sec.bmax / 2)}" y2="${yt + 4}"/><line x1="${X(sec.bmax / 2)}" y1="${yt - 4}" x2="${X(sec.bmax / 2)}" y2="${yt + 4}"/></g>`;
+  out += `<text x="${xl - 7}" y="${(Y(sec.h) + Y(0)) / 2}" transform="rotate(-90 ${xl - 7} ${(Y(sec.h) + Y(0)) / 2})" text-anchor="middle" style="fill:var(--muted);font:11px var(--f-mono)">${f(sec.h, 0)}</text>`;
+  out += `<text x="${cx}" y="${yt - 6}" text-anchor="middle" style="fill:var(--muted);font:11px var(--f-mono)">${f(sec.bmax, 0)}</text>`;
+  // tyngdepunkter
+  const xa = X(-sec.bmax / 2) - 14, xb = X(sec.bmax / 2) + 14;
+  out += `<line x1="${xa}" y1="${Y(G.zc)}" x2="${xb}" y2="${Y(G.zc)}" style="stroke:var(--ink);stroke-width:.9;stroke-dasharray:8 3 2 3"/>`;
+  out += `<text x="${xb + 4}" y="${Y(G.zc) + (eff && Math.abs(eff.zc - G.zc) * s < 14 && eff.zc > G.zc ? 12 : -3)}" style="fill:var(--ink);font:11px var(--f-body)">TP</text>`;
+  if (eff && Math.abs(eff.zc - G.zc) > 1e-3) {
+    out += `<line x1="${xa}" y1="${Y(eff.zc)}" x2="${xb}" y2="${Y(eff.zc)}" style="stroke:var(--k4);stroke-width:1.1;stroke-dasharray:5 3"/>`;
+    out += `<text x="${xb + 4}" y="${Y(eff.zc) + (eff.zc > G.zc ? -3 : 12)}" style="fill:var(--k4);font:11px var(--f-body)">TP<tspan dy="3" font-size="8">eff</tspan></text>`;
+  }
+  if (sec.type === 'angle') {
+    const yc = G.yc, zc = G.zc, Lh = 0.62 * Math.max(sec.h, sec.bmax);
+    out += `<line x1="${X(yc)}" y1="${Y(sec.h) - 10}" x2="${X(yc)}" y2="${Y(0) + 10}" style="stroke:var(--ink);stroke-width:.9;stroke-dasharray:8 3 2 3"/>`;
+    [[G.thU, 'u'], [G.thU + Math.PI / 2, 'v']].forEach(([th, l]) => {
+      const dy = Math.cos(th) * Lh, dz = Math.sin(th) * Lh;
+      out += `<line x1="${X(yc - dy)}" y1="${Y(zc - dz)}" x2="${X(yc + dy)}" y2="${Y(zc + dz)}" style="stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3"/>`;
+      out += `<text x="${X(yc + dy) + 4}" y="${Y(zc + dz) - 4}" style="fill:var(--accent);font:italic 600 12px var(--f-body)">${l}</text>`;
+    });
+    if (eff) out += `<circle cx="${X(eff.yc)}" cy="${Y(eff.zc)}" r="3.2" style="fill:var(--k4)"/>`;
+    out += `<circle cx="${X(yc)}" cy="${Y(zc)}" r="3.2" style="fill:var(--ink)"/>`;
+  }
+  // spændingsdiagram (brutto, elastisk, kombineret)
+  const sT = res.NEd / G.A + res.MEd * (sec.h - G.zc) / G.Iy, sB = res.NEd / G.A - res.MEd * G.zc / G.Iy;
+  const x0 = 480, mx = Math.max(Math.abs(sT), Math.abs(sB), 1e-9), sc = 90 / mx;
+  const SX = sg => x0 + sg * sc;
+  out += `<text x="${x0}" y="${top - 26}" text-anchor="middle" style="fill:var(--muted);font:600 11px var(--f-body)">σ<tspan dy="3" font-size="8">x,Ed</tspan><tspan dy="-3"> brutto, tryk +</tspan></text>`;
+  const poly = (a, b) => { // a,b: [z, σ]
+    const col = (a[1] + b[1]) / 2 >= 0 ? 'var(--comp)' : 'var(--tens)';
+    return `<polygon points="${x0},${Y(a[0])} ${SX(a[1])},${Y(a[0])} ${SX(b[1])},${Y(b[0])} ${x0},${Y(b[0])}" style="fill:${col};fill-opacity:.18;stroke:${col};stroke-width:1.2"/>`;
+  };
+  if (Math.abs(sT) > 1e-9 || Math.abs(sB) > 1e-9) {
+    if (sT * sB < 0) { const zz = -sB * sec.h / (sT - sB); out += poly([0, sB], [zz, 0]) + poly([zz, 0], [sec.h, sT]); }
+    else out += poly([0, sB], [sec.h, sT]);
+  }
+  out += `<line x1="${x0}" y1="${Y(sec.h) - 8}" x2="${x0}" y2="${Y(0) + 8}" style="stroke:var(--ink);stroke-width:1"/>`;
+  const lab = (z, sg, dy) => `<text x="${sg >= 0 ? SX(sg) + 6 : SX(sg) - 6}" y="${Y(z) + dy}" text-anchor="${sg >= 0 ? 'start' : 'end'}" style="fill:var(--ink);font:11px var(--f-mono)">${f(sg, 0)}</text>`;
+  out += lab(sec.h, sT, 4) + lab(0, sB, 4);
+  out += `<text x="${x0}" y="${Y(0) + 26}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
+  return out + '</svg>';
+}
+
+/* ---------- Tabeller ---------- */
+const clsPill = k => k == null ? '<span class="na">–</span>' : `<span class="pill c${k} b${k}">Kl. ${k}</span>`;
+const typeTxt = el => el.kind === 'angle' ? 'Vinkel, ark 3' : el.kind === 'chs' ? 'Rørvæg' : el.kind === 'outstand' ? 'Udstående' : 'Indre';
+function elementRows(cl, title) {
+  let h = `<tr class="grp"><td colspan="11">${title} · klasse ${cl.cls}</td></tr>`;
+  for (const e of cl.els) {
+    const L = e.lims, gi = L ? L.findIndex(l => l != null && e.ratio <= l + 1e-9) : -1;
+    const lc = i => !L || L[i] == null ? '<td class="num na">–</td>' : `<td class="num${i === gi ? ` hit c${e.cls}` : ''}">${isFinite(L[i]) ? f(L[i], 1) : '∞'}</td>`;
+    h += `<tr><td>${e.el.label}</td><td>${typeTxt(e.el)}</td><td class="num">${f(e.el.c, 1)}</td><td class="num">${f(e.el.t, 1)}</td><td class="num"><b>${f(e.ratio, 2)}</b></td>
+      <td class="num">${e.alpha == null ? '–' : f(e.alpha, 3)}</td><td class="num">${e.psi == null ? '–' : f(e.psi, 3)}</td>${lc(0)}${lc(1)}${lc(2)}<td>${e.pill ? `<span class="pill c1 b1">${e.pill}</span>` : L ? clsPill(e.cls) : `<span class="pill" style="color:var(--muted)">${e.note || 'Intet tryk'}</span>`}</td></tr>`;
+  }
+  return h;
+}
+function widthRows(eff, title, eps) {
+  if (!eff || !eff.det.length) return '';
+  let h = `<tr class="grp"><td colspan="11">${title}</td></tr>`;
+  for (const d of eff.det) {
+    const w = d.w, ineff = w.hole ? w.hole[1] - w.hole[0] : 0;
+    h += `<tr><td>${d.el.label}</td><td class="num">${f(w.psi, 3)}</td><td class="num">${f(w.k, 3)}</td><td class="num">${f(w.lp, 3)}</td><td class="num"><b>${f(w.rho, 3)}</b></td>
+      <td class="num">${f(w.bc, 1)}</td><td class="num">${f(w.beff, 1)}</td><td class="num">${f(w.be1, 1)}</td><td class="num">${w.be2 == null ? '–' : f(w.be2, 1)}</td><td class="num">${f(ineff, 1)}</td><td class="num">${d.zna != null ? f(d.zna, 1) : '–'}</td></tr>`;
+  }
+  return h;
+}
+
+/* ---------- Render ---------- */
+function render() {
+  const out = $('out');
+  ['rolled', 'welded', 'rhs', 'chs', 'angle'].forEach(t => $('g-' + t).hidden = typ() !== t);
+  $('MEd').disabled = typ() === 'angle';
+  $('fyManBox').hidden = !$('fyMan').checked;
+  $('naBox').hidden = radio('sit') === 'ulykke';
+  $('ctrlHint').hidden = $('ctrl').value !== 'skaerpet' || radio('sit') === 'ulykke';
+  let sec;
+  try { sec = buildSection(); } catch (e) { out.innerHTML = `<div class="err"><b>Kan ikke beregne:</b> ${e.message}</div>`; return; }
+  const fyT = Core.fyTable($('grade').value, sec.tmax);
+  const fy = $('fyMan').checked ? num('fyVal') : fyT;
+  const gm = Core.gammaM0({ situation: radio('sit'), lk: +$('lk').value, cc: $('cc').value, control: $('ctrl').value });
+  sideInfo(sec, fyT, fy, gm);
+  if (!(fy > 0)) { out.innerHTML = `<div class="err"><b>Mangler f<sub>y</sub>:</b> godstykkelsen ${f(sec.tmax, 1)} mm ligger uden for EN 1993-1-1 tabel 3.1 (t ≤ 80 mm). Slå "Angiv f<sub>y</sub> manuelt" til og indtast værdien fra produktstandarden.</div>`; return; }
+  const isL = sec.type === 'angle', NEd = num('NEd'), MEd = isL ? 0 : num('MEd');
+  if (!isFinite(NEd) || !isFinite(MEd)) { out.innerHTML = `<div class="err"><b>Kan ikke beregne:</b> N<sub>Ed</sub> og M<sub>y,Ed</sub> skal være tal (brug 0 for ingen last).</div>`; return; }
+  const res = Core.run(sec, { fy, gM0: gm.g, NEd: NEd * 1e3, MEd: MEd * 1e6, iterate: $('iter').checked });
+  const G = res.G, k = res.cC.cls, mNeg = MEd < 0, effM = mNeg ? res.effMn : res.effMp;
+  if (view === 'N' && !res.effN) view = 'G';
+  if (view === 'M' && !effM) view = 'G';
+
+  // Resumé
+  const U = res.I.util, uc = U == null ? 'k3' : U <= 1 ? 'k1' : 'k4';
+  let h = `<section class="card"><div class="summary">
+    <div class="badge c${k} b${k}"><div><div class="lbl">Klasse</div><div class="num">${k}</div><div class="cap">${isL ? 'N<sub>Ed</sub>' : 'N<sub>Ed</sub> + M<sub>y,Ed</sub>'}</div></div></div>
+    <div style="min-width:0">
+      <h2>${sec.name} · ${$('fyMan').checked ? 'f<sub>y</sub> ' + f(fy, 0) : $('grade').value}</h2>
+      <p class="sub">N<sub>Ed</sub> = ${f(NEd, 1)} kN${isL ? ' (normalkraft alene)' : `, M<sub>y,Ed</sub> = ${f(MEd, 1)} kNm`}</p>
+      <div class="cases"${isL ? ' style="grid-template-columns:repeat(2,minmax(0,1fr))"' : ''}>
+        <div class="case b${res.cN.cls}"><span class="t">Ren tryk</span><span class="v c${res.cN.cls}">Klasse ${res.cN.cls}</span></div>
+        ${isL ? '' : `<div class="case b${res.cM.cls}"><span class="t">Ren bøjning (${mNeg ? 'tryk i underside' : 'tryk i overside'})</span><span class="v c${res.cM.cls}">Klasse ${res.cM.cls}</span></div>`}
+        <div class="case b${k}"><span class="t">${isL ? (NEd < 0 ? 'Træk' : 'N<sub>Ed</sub>') : 'Kombineret'}</span><span class="v c${k}">Klasse ${k}</span></div>
+      </div>
+      <div class="kv"><span><b>f<sub>y</sub></b> ${f(fy, 0)} MPa</span><span><b>ε</b> ${f(res.eps, 4)}</span><span><b>γ<sub>M0</sub></b> ${f(gm.g, 3)}</span><span><b>f<sub>y</sub>/γ<sub>M0</sub></b> ${f(res.fyd, 1)} MPa</span></div>
+      <div class="util"><div class="txt"><span>Udnyttelse af tværsnit · ${res.I.method}</span><strong class="${uc.replace('k', 'c')}">${U == null ? 'ikke beregnet' : f(U * 100, 1) + ' %'}</strong></div>
+      <div class="bar"><i style="width:${U == null ? 0 : Math.min(U, 1) * 100}%;background:var(--${uc})"></i></div></div>
+    </div></div></section>`;
+
+  // Tegning
+  const eff = view === 'N' ? res.effN : view === 'M' ? effM : null;
+  h += `<section class="card"><div class="drawhead"><div><h2>Tværsnit og spændinger</h2><p class="sub">${view === 'G' ? 'Bruttotværsnit' : view === 'N' ? 'Effektivt tværsnit ved ren tryk (A<sub>eff</sub>)' : 'Effektivt tværsnit ved ren bøjning (W<sub>eff</sub>)'}</p></div>
+    <div class="views" role="group" aria-label="Visning">
+      <button type="button" data-v="G" aria-pressed="${view === 'G'}">Brutto</button>
+      <button type="button" data-v="N" aria-pressed="${view === 'N'}" ${res.effN ? '' : 'disabled'}>Effektivt · tryk</button>
+      ${isL ? '' : `<button type="button" data-v="M" aria-pressed="${view === 'M'}" ${effM ? '' : 'disabled'}>Effektivt · bøjning</button>`}
+    </div></div>
+    <div class="svgbox">${svgSection(res, eff)}</div>
+    <div class="legend"><span><i style="background:var(--steel)"></i>Effektivt materiale</span><span><i style="background:var(--k4-bg);border-color:var(--k4)"></i>Ineffektiv del</span><span><i style="background:var(--comp);opacity:.5;border:0"></i>Tryk</span><span><i style="background:var(--tens);opacity:.5;border:0"></i>Træk</span></div>
+  </section>`;
+
+  // Klassifikation
+  const defs = [...new Set(sec.elements.map(e => `${e.label}: ${e.cDef}`))].join(' · ');
+  h += `<section class="card"><h2>Klassifikation af tværsnitsdele</h2><p class="sub">EN 1993-1-1 tabel 5.2. Grænseværdier for c/t ved ε = ${f(res.eps, 4)}. ${isL ? 'Benene kontrolleres som udstående dele (ark 2), og vinklen som helhed efter ark 3, der kun angiver grænsen for klasse 3. Ved ren tryk er bæreevnen den samme i klasse 1–3.' : 'α fra plastisk spændingsfordeling ved f<sub>y</sub>/γ<sub>M0</sub>, ψ fra elastisk bruttospænding.'}</p>
+    <div class="tbl"><table><thead><tr><th>Del</th><th>Type</th><th>c [mm]</th><th>t [mm]</th><th>c/t</th><th>α</th><th>ψ</th><th>Kl. 1 ≤</th><th>Kl. 2 ≤</th><th>Kl. 3 ≤</th><th>Klasse</th></tr></thead>
+    <tbody>${isL ? elementRows(res.cC, 'Aktuel normalkraft N<sub>Ed</sub>') + elementRows(res.cN, 'Ren tryk') : elementRows(res.cC, 'Kombineret N<sub>Ed</sub> + M<sub>y,Ed</sub>') + elementRows(res.cN, 'Ren tryk') + elementRows(res.cM, 'Ren bøjning')}</tbody></table></div>
+    <p class="hint" style="margin-top:8px">${defs}</p></section>`;
+
+  // Serieoversigt for standardprofiler
+  const ovr = overview(gm);
+  if (ovr) {
+    const n4 = ovr.rows.filter(r => r.cN === 4).length, m4 = ovr.rows.filter(r => r.cM === 4).length, n3 = ovr.rows.filter(r => r.cN === 3 || r.cM === 3).length;
+    h += `<section class="card"><h2>Serieoversigt · ${ovr.fam}${ovr.mfg ? (ovr.mfg === 'hot' ? ' varmformet' : ' koldformet') : ''} · ${$('fyMan').checked ? 'f<sub>y</sub> ' + f(num('fyVal'), 0) : $('grade').value}</h2>
+      <p class="sub">${ovr.rows.length} standardstørrelser. ${isL ? `${n4} er i klasse 4 ved ren tryk${n4 ? `, heraf ${ovr.rows.filter(r => r.cN === 4 && r.aRatio < 1).length} med A<sub>eff</sub> < A` : ''}.` : `${n4} er i klasse 4 ved ren tryk og ${m4} ved ren bøjning; ${n3} har klasse 3 i mindst ét tilfælde.`} Vælg en række for at regne profilet.</p>
+      <div class="tbl ovwrap"><table><thead><tr><th>Profil</th><th>f<sub>y</sub></th><th>maks c/t</th><th>Ren tryk</th><th>A<sub>eff</sub>/A</th><th>N<sub>c,Rd</sub> [kN]</th><th>Ren bøjning</th><th>W<sub>eff</sub>/W<sub>el</sub></th><th>M<sub>c,y,Rd</sub> [kNm]</th></tr></thead><tbody>
+      ${ovr.rows.map(r => r.na ? `<tr class="pick" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"><td>${r.p.key}</td><td colspan="8" class="na">Godstykkelse uden for tabel 3.1</td></tr>` :
+        `<tr class="pick${r.p.key === ovr.cur ? ' cur' : ''}" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"${r.p.key === ovr.cur ? ' aria-current="true"' : ''}><td>${r.p.key}</td><td class="num">${f(r.fy, 0)}</td><td class="num">${f(r.maxct, 1)}</td><td>${clsPill(r.cN)}</td><td class="num">${r.aRatio == null ? '–' : f(r.aRatio, 3)}</td><td class="num">${r.Nc == null ? '–' : f(r.Nc / 1e3, 0)}</td><td>${clsPill(r.cM)}</td><td class="num">${r.wRatio == null ? '–' : f(r.wRatio, 3)}</td><td class="num">${r.Mc == null ? '–' : f(r.Mc / 1e6, 1)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <p class="hint" style="margin-top:8px">A<sub>eff</sub>/A og W<sub>eff</sub>/W<sub>el</sub> = 1 betyder fuldt effektivt. Bæreevner med γ<sub>M0</sub> = ${f(gm.g, 3)}${ovr.fam === 'CHS' ? '; klasse 4 rør kræver EN 1993-1-6' : ''}. Standardstørrelserne er typiske; kontrollér, at profilet kan leveres.</p></section>`;
+  }
+
+  // Effektive bredder
+  const anyEff = res.effN || res.effMp || res.effMn;
+  h += `<section class="card"><h2>Effektive bredder</h2><p class="sub">EN 1993-1-5 tabel 4.1 (indre dele) og 4.2 (udstående dele). λ̄<sub>p</sub> = (b̄/t) / (28,4·ε·√k<sub>σ</sub>).</p>`;
+  if (sec.type === 'chs' && k === 4) h += `<p class="hint">Rør i klasse 4 behandles efter EN 1993-1-6. Programmet beregner ikke effektivt tværsnit for CHS.</p>`;
+  else if (!anyEff) h += `<p class="hint">Ingen dele er i klasse 4. Tværsnittet er fuldt effektivt: A<sub>eff</sub> = A og W<sub>eff</sub> = W<sub>el</sub>.</p>`;
+  else h += `<div class="tbl"><table><thead><tr><th>Del</th><th>ψ</th><th>k<sub>σ</sub></th><th>λ̄<sub>p</sub></th><th>ρ</th><th>b̄ / b<sub>c</sub></th><th>b<sub>eff</sub></th><th>b<sub>e1</sub></th><th>b<sub>e2</sub></th><th>Ineffektiv</th><th>z<sub>NA</sub> for ψ</th></tr></thead><tbody>
+      ${widthRows(res.effN, 'Ren tryk → A<sub>eff</sub>')}${widthRows(res.effMp, 'Ren bøjning, tryk i overside → W<sub>eff</sub>')}${widthRows(res.effMn, 'Ren bøjning, tryk i underside → W<sub>eff</sub>')}</tbody></table></div>
+      <p class="hint" style="margin-top:8px">Mål i mm. b<sub>e1</sub> ligger ved kanten med størst tryk; for udstående dele ligger b<sub>eff</sub> ved den understøttede kant.${isL ? ' For vinkler er b̄ = benets fulde længde (EN 1993-1-5, 4.4(2)), og b<sub>eff</sub> regnes fra hælen.' : ''} z<sub>NA</sub> måles fra underkant.${$('iter').checked ? ' ψ for kroppen er itereret.' : ''}</p>`;
+  h += `</section>`;
+
+  if (isL) {
+    const E = res.effN, deg = th => f(th * 180 / Math.PI, 1) + '°';
+    const rL = (lbl, u, gv, ev, d) => `<tr><td>${lbl}</td><td>${u}</td><td class="num">${f(gv, d)}</td>${E ? `<td class="num">${ev == null ? '–' : f(ev, d)}</td>` : ''}</tr>`;
+    const o = sec.dims.o;
+    h += `<div class="grid2"><section class="card"><h2>Tværsnitskonstanter</h2><p class="sub">y og z måles fra hælen. u er den stærke hovedakse.</p><div class="tbl"><table><thead><tr><th></th><th>Enhed</th><th>Brutto</th>${E ? '<th>Eff. tryk</th>' : ''}</tr></thead><tbody>
+      ${rL('A', 'mm²', G.A, E?.A, 0)}${rL('y<sub>c</sub> (afstand til ryg af lodret ben)', 'mm', G.yc - o, E ? E.yc - o : null, 1)}${rL('z<sub>c</sub> (afstand til ryg af vandret ben)', 'mm', G.zc, E?.zc, 1)}
+      ${rL('I<sub>y</sub>', '10⁶ mm⁴', G.Iy / 1e6, E ? E.P.Iy / 1e6 : null, 3)}${rL('I<sub>z</sub>', '10⁶ mm⁴', G.Iz / 1e6, E ? E.P.Iz / 1e6 : null, 3)}${rL('I<sub>yz</sub>', '10⁶ mm⁴', G.Iyz / 1e6, E ? E.P.Iyz / 1e6 : null, 3)}
+      ${rL('I<sub>u</sub>', '10⁶ mm⁴', G.Iu / 1e6, E ? E.Iu / 1e6 : null, 3)}${rL('I<sub>v</sub>', '10⁶ mm⁴', G.Iv / 1e6, E ? E.Iv / 1e6 : null, 3)}
+      ${rL('W<sub>el,u</sub>', '10³ mm³', G.Wu / 1e3, E ? E.Wu / 1e3 : null, 2)}${rL('W<sub>el,v</sub>', '10³ mm³', G.Wv / 1e3, E ? E.Wv / 1e3 : null, 2)}
+      ${rL('i<sub>v</sub>', 'mm', G.iv, null, 1)}
+      <tr><td>Hovedaksens vinkel α (u fra y)</td><td>grader</td><td class="num">${deg(G.thU)}</td>${E ? '<td class="num na">–</td>' : ''}</tr>
+      ${E ? `<tr><td>e<sub>N,u</sub> / e<sub>N,v</sub></td><td>mm</td><td class="num na">–</td><td class="num">${f(E.eu, 1)} / ${f(E.ev, 1)}</td></tr>` : ''}
+    </tbody></table></div></section>`;
+    const I = res.I, T = I.terms;
+    let fl;
+    if (T.Aeff) fl = `<div>N<sub>Ed</sub>/(A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub>) + |N<sub>Ed</sub>·e<sub>N,v</sub>|/(W<sub>eff,u</sub>·f<sub>y</sub>/γ<sub>M0</sub>) + |N<sub>Ed</sub>·e<sub>N,u</sub>|/(W<sub>eff,v</sub>·f<sub>y</sub>/γ<sub>M0</sub>) ≤ 1</div>
+        <div>A<sub>eff</sub> = ${f(T.Aeff, 0)} mm², ΔM<sub>u</sub> = ${f(T.dMu / 1e6, 2)} kNm, ΔM<sub>v</sub> = ${f(T.dMv / 1e6, 2)} kNm</div>
+        <div>${f(T.tN, 3)} + ${f(T.tU, 3)} + ${f(T.tV, 3)} = <b>${f(I.util, 3)}</b></div>`;
+    else fl = `<div>|N<sub>Ed</sub>| / N<sub>${NEd < 0 ? 'pl' : 'c'},Rd</sub> = ${f(Math.abs(NEd), 1)} / ${f((NEd < 0 ? res.R.Npl : res.R.NcRd) / 1e3, 1)} = <b>${f(I.util, 3)}</b></div>`;
+    h += `<section class="card"><h2>Tværsnitsbæreevne</h2><p class="sub">EN 1993-1-1 6.2 med γ<sub>M0</sub> = ${f(gm.g, 3)}</p>
+      <div class="tbl"><table><tbody>
+        <tr><td>N<sub>pl,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub></td><td class="num">${f(res.R.Npl / 1e3, 1)} kN</td></tr>
+        <tr><td>N<sub>c,Rd</sub> = ${E ? 'A<sub>eff</sub>' : 'A'}·f<sub>y</sub>/γ<sub>M0</sub> (klasse ${res.cN.cls})</td><td class="num">${f(res.R.NcRd / 1e3, 1)} kN</td></tr>
+      </tbody></table></div>
+      <h2 style="margin-top:14px;font-size:14px">${I.method}</h2>
+      <div class="formula" style="margin-top:6px">${fl}</div>
+      <p class="hint" style="margin-top:8px">Forskydningen e<sub>N</sub> giver tillægsmomenter, når A<sub>eff</sub> < A. Ved træk er nettoarealet ved bolthuller (N<sub>u,Rd</sub>) ikke kontrolleret, og for ben forbundet i ét ben gælder EN 1993-1-8, 3.10.3 og EN 1993-1-1 bilag BB.</p></section></div>`;
+  } else {
+    // Tværsnitskonstanter
+    const col = (P, extra) => P ? [P.A, P.zc, P.Iy / 1e6, P.WyTop / 1e3, P.WyBot / 1e3] : [null, null, null, null, null];
+    const g = col(G), en = col(res.effN?.P), ep = col(res.effMp?.P), em = col(res.effMn?.P);
+    const rowsP = [['A', 'mm²', 0], ['z<sub>c</sub> fra underkant', 'mm', 1], ['I<sub>y</sub>', '10⁶ mm⁴', 2], ['W<sub>y</sub> overkant', '10³ mm³', 1], ['W<sub>y</sub> underkant', '10³ mm³', 1]];
+    const showP = !!res.effMp, showM = !!res.effMn;
+    h += `<div class="grid2"><section class="card"><h2>Tværsnitskonstanter</h2><p class="sub">Bruttotværsnit og effektive tværsnit</p><div class="tbl"><table><thead><tr><th></th><th>Enhed</th><th>Brutto</th>${res.effN ? '<th>Eff. tryk</th>' : ''}${showP ? '<th>Eff. M+</th>' : ''}${showM ? '<th>Eff. M−</th>' : ''}</tr></thead><tbody>`;
+    rowsP.forEach((r, i) => { h += `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="num">${f(g[i], r[2])}</td>${res.effN ? `<td class="num">${f(en[i], r[2])}</td>` : ''}${showP ? `<td class="num">${f(ep[i], r[2])}</td>` : ''}${showM ? `<td class="num">${f(em[i], r[2])}</td>` : ''}</tr>`; });
+    const ncol = 1 + (res.effN ? 1 : 0) + (showP ? 1 : 0) + (showM ? 1 : 0);
+    const extra = (lbl, u, v, d) => `<tr><td>${lbl}</td><td>${u}</td><td class="num">${f(v, d)}</td>${'<td class="num na">–</td>'.repeat(ncol - 1)}</tr>`;
+    h += extra('W<sub>pl,y</sub>', '10³ mm³', G.Wpl / 1e3, 1) + extra('I<sub>z</sub>', '10⁶ mm⁴', G.Iz / 1e6, 2) + extra('W<sub>el,z</sub>', '10³ mm³', G.Wz / 1e3, 1) + extra('W<sub>pl,z</sub>', '10³ mm³', G.Wplz / 1e3, 1);
+    if (res.effN) h += `<tr><td>e<sub>N</sub> = z<sub>c</sub> − z<sub>c,eff</sub></td><td>mm</td><td class="num na">–</td><td class="num">${f(-res.effN.eN, 1)}</td>${'<td class="num na">–</td>'.repeat(ncol - 2)}</tr>`;
+    h += `</tbody></table></div></section>`;
+
+    // Bæreevne
+    const I = res.I, T = I.terms, fyd = res.fyd;
+    let fl = '';
+    if (I.method.includes('6.36') || I.method.includes('6.39')) {
+      fl = `<div>n = N<sub>Ed</sub>/N<sub>pl,Rd</sub> = ${f(T.n, 3)}, a = ${f(T.a, 3)}</div><div>M<sub>N,y,Rd</sub> = M<sub>pl,y,Rd</sub>(1 − n)/(1 − 0,5a) = ${f(T.MNRd / 1e6, 1)} kNm</div><div>|M<sub>y,Ed</sub>| / M<sub>N,y,Rd</sub> = ${f(Math.abs(MEd) / (T.MNRd / 1e6), 3)}</div>`;
+    } else if (I.method.includes('6.33')) {
+      fl = `<div>N<sub>Ed</sub> ≤ 0,25·N<sub>pl,Rd</sub> og N<sub>Ed</sub> ≤ 0,5·h<sub>w</sub>t<sub>w</sub>f<sub>y</sub>/γ<sub>M0</sub> → M<sub>N,y,Rd</sub> = M<sub>pl,y,Rd</sub> = ${f(T.MNRd / 1e6, 1)} kNm</div><div>|M<sub>y,Ed</sub>| / M<sub>N,y,Rd</sub> = ${f(Math.abs(MEd) / (T.MNRd / 1e6), 3)}, n = ${f(T.n, 3)}</div>`;
+    } else if (I.method.includes('eksakt')) {
+      fl = `<div>Plastisk nullinje z<sub>pl</sub> = ${f(T.zp, 1)} mm fra underkant</div><div>M<sub>N,y,Rd</sub> = ${f(T.MNRd / 1e6, 1)} kNm, n = ${f(T.n, 3)}</div><div>|M<sub>y,Ed</sub>| / M<sub>N,y,Rd</sub> = ${f(Math.abs(MEd) / (T.MNRd / 1e6), 3)}</div>`;
+    } else if (I.method.includes('6.2.9.2')) {
+      fl = `<div>σ<sub>overkant</sub> = N/A + M·(h − z<sub>c</sub>)/I<sub>y</sub> = ${f(T.sT, 1)} MPa</div><div>σ<sub>underkant</sub> = N/A − M·z<sub>c</sub>/I<sub>y</sub> = ${f(T.sB, 1)} MPa</div><div>max|σ| / (f<sub>y</sub>/γ<sub>M0</sub>) = ${f(Math.max(Math.abs(T.sT), Math.abs(T.sB)), 1)} / ${f(fyd, 1)} = ${f(I.util, 3)}</div>`;
+    } else if (I.method.includes('6.44')) {
+      fl = `<div>N<sub>Ed</sub>/(A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub>) + (M<sub>y,Ed</sub> + N<sub>Ed</sub>·e<sub>N</sub>)/(W<sub>eff,min</sub>·f<sub>y</sub>/γ<sub>M0</sub>) ≤ 1</div>
+        <div>A<sub>eff</sub> = ${f(T.Aeff, 0)} mm², e<sub>N</sub> = ${f(-T.eN, 1)} mm, N<sub>Ed</sub>·e<sub>N</sub> = ${f(T.dM / 1e6, 1)} kNm</div>
+        <div>W<sub>eff,min</sub> = ${f(T.Weff / 1e3, 1)}·10³ mm³ (for M = ${f(T.Mtot / 1e6, 1)} kNm)</div>
+        <div>${f(T.tN, 3)} + ${f(T.tM, 3)} = <b>${f(I.util, 3)}</b></div>`;
+    } else fl = `<div>${I.method}</div>`;
+    h += `<section class="card"><h2>Tværsnitsbæreevne</h2><p class="sub">EN 1993-1-1 6.2 med γ<sub>M0</sub> = ${f(gm.g, 3)}</p>
+      <div class="tbl"><table><tbody>
+        <tr><td>N<sub>pl,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub></td><td class="num">${f(res.R.Npl / 1e3, 1)} kN</td></tr>
+        <tr><td>N<sub>c,Rd</sub> (klasse ${res.cN.cls} ved tryk)</td><td class="num">${res.R.NcRd == null ? '–' : f(res.R.NcRd / 1e3, 1) + ' kN'}</td></tr>
+        <tr><td>M<sub>c,y,Rd</sub> = ${res.R.Wbasis}·f<sub>y</sub>/γ<sub>M0</sub> (klasse ${res.cM.cls})</td><td class="num">${res.R.McRd == null ? '–' : f(res.R.McRd / 1e6, 1) + ' kNm'}</td></tr>
+      </tbody></table></div>
+      <h2 style="margin-top:14px;font-size:14px">Kombineret, klasse ${k}: ${I.method}</h2>
+      <div class="formula" style="margin-top:6px">${fl}</div></section></div>`;
+
+  }
+
+  // Forudsætninger
+  h += `<section class="card"><h2>Forudsætninger</h2><p class="sub">Hvad programmet regner, og hvad det ikke dækker</p><ul class="notes">
+    <li>f<sub>y</sub> efter EN 1993-1-1 tabel 3.1 (DK NA 3.2.1: valgmulighed a), bestemt ud fra profilets største godstykkelse.</li>
+    <li>γ<sub>M0</sub> = 1,1·γ<sub>0</sub>·γ<sub>3</sub> efter DS/EN 1993-1-1 DK NA:2019, 6.1(1). γ<sub>0</sub> = 1,0 for lastkombination 1–2, K<sub>FI</sub> for 3–4 og 1,2·K<sub>FI</sub> for 5. Ved ulykke og seismik er γ<sub>M0</sub> = 1,0.</li>
+    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
+    <li>L-profiler: benene kontrolleres som udstående dele med c = ben − t − r<sub>1</sub>, og vinklen efter tabel 5.2 ark 3 (h/t ≤ 15ε og (b + h)/2t ≤ 11,5ε, ellers klasse 4). Ark 3 gælder ikke for vinkler i kontinuert kontakt med andre dele. Effektive bredder med b̄ = benlængden og k<sub>σ</sub> = 0,43. Kun normalkraft.</li>
+    <li>c-mål efter tabel 5.2. Valsede profiler: fradrag for rodradius r. Svejste profiler: fradrag √2·a for kantsvejs. RHS: c = h − 3t og b − 3t (konservativt).</li>
+    <li>Kun dele i klasse 4 reduceres. A<sub>eff</sub> bestemmes ved ren tryk og W<sub>eff</sub> ved ren bøjning, jf. EN 1993-1-5, 4.3(3)–(4). ρ for indre dele bruger grænsen λ̄<sub>p</sub> ≤ 0,5 + √(0,085 − 0,055ψ).</li>
+    <li>Flanger regnes med ψ fra bruttotværsnittet. Kroppens ψ bestemmes med effektiv trykflange og brutto krop, jf. EN 1993-1-5, 4.4(3).</li>
+    <li>For dobbeltsymmetriske I-profiler og RHS i klasse 1–2 bruges (6.33)–(6.36) hhv. (6.39); for øvrige profiler en eksakt plastisk spændingsblok.</li>
+    <li>Ikke medtaget: forskydning (V<sub>Ed</sub>), shear lag, forskydningsbuling, bøjning om z-aksen, reduceret slankhed efter 4.4(4), samt søjle- og kipningsstabilitet. Klasse 4 rør henvises til EN 1993-1-6.</li>
+    <li>Profilmål for IPE, HEA, HEB og HEM samt listen over standard SHS, RHS og CHS er typiske standardværdier. Kontrollér mål og leveringsmulighed mod leverandørens tabel ved projektering. Andre serier kan regnes ved at rette målene.</li>
+  </ul></section>`;
+
+  out.innerHTML = h;
+  out.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => { view = b.dataset.v; render(); }));
+  out.querySelectorAll('tr.pick').forEach(tr => {
+    const go = () => { applyPreset(tr.dataset.id, tr.dataset.key); render(); };
+    tr.addEventListener('click', go);
+    tr.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  });
+  const wrap = out.querySelector('.ovwrap'), cur = out.querySelector('tr.cur');
+  if (wrap && cur) wrap.scrollTop = Math.max(0, cur.offsetTop - wrap.clientHeight / 2 + cur.offsetHeight);
+}
+
+const ovCache = {};
+function overview(gm) {
+  const t = typ(); let id, list, fam;
+  if (t === 'rolled') { const m = matchPreset('rprof'); if (!m) return null; fam = m.group; list = CAT.rolled.filter(p => p.group === fam); id = 'rprof'; }
+  else if (t === 'rhs') { fam = num('r_h') === num('r_b') ? 'SHS' : 'RHS'; list = CAT[fam]; id = 'hprof'; }
+  else if (t === 'chs') { fam = 'CHS'; list = CAT.CHS; id = 'cprof'; }
+  else if (t === 'angle') { const m = matchPreset('lprof'); fam = m ? m.group : ($('l_h').value === $('l_b').value ? 'L lige' : 'L ulige'); list = CAT.L.filter(p => p.group === fam); id = 'lprof'; }
+  else return null;
+  const mfg = t === 'rhs' ? radio('mfg') : '', fyMan = $('fyMan').checked ? num('fyVal') : null, grade = $('grade').value;
+  const key = [fam, mfg, grade, fyMan, gm.g].join('|');
+  if (!ovCache[key]) ovCache[key] = list.map(p => {
+    const s = t === 'angle' ? Core.buildAngle({ ...p.dims, name: p.key }) : t === 'rolled' ? Core.buildRolledDims({ name: p.key, ...p.dims }) : t === 'rhs' ? Core.buildRHS({ ...p.dims, mfg, name: p.key }) : Core.buildCHS({ ...p.dims, name: p.key });
+    const fy = fyMan > 0 ? fyMan : Core.fyTable(grade, s.tmax);
+    if (!fy) return { p, na: true };
+    const r = Core.run(s, { fy, gM0: gm.g, NEd: 0, MEd: 0 });
+    return { p, fy, cN: r.cN.cls, cM: r.cM ? r.cM.cls : null, maxct: Math.max(...s.elements.map(e => e.c / e.t)),
+      aRatio: r.effN ? r.effN.A / r.G.A : (r.cN.cls < 4 ? 1 : null), wRatio: !r.cM ? null : r.effMp ? r.effMp.Wmin / r.G.Welmin : (r.cM.cls < 4 ? 1 : null), Nc: r.R.NcRd, Mc: r.R.McRd };
+  });
+  return { fam, id, mfg, rows: ovCache[key], cur: $(id).value };
+}
+
+['rprof', 'hprof', 'cprof', 'lprof'].forEach(id => {
+  fillPresetSelect(id);
+  $(id).addEventListener('change', () => { if ($(id).value !== 'custom') applyPreset(id, $(id).value); render(); });
+});
+applyPreset('rprof', 'IPE 400'); applyPreset('hprof', 'SHS 200×200×5'); applyPreset('cprof', 'CHS 508×8'); applyPreset('lprof', 'L 150×90×10');
+$('frm').addEventListener('input', e => { if (!PRESET[e.target.id]) render(); });
+$('frm').addEventListener('change', e => { if (!PRESET[e.target.id]) render(); });
+$('frm').addEventListener('submit', e => e.preventDefault());
+// Eksempel: IPE 400 i S355 med stor normalkraft → klasse 4; vis A_eff
+view = 'N';
+render();
+})();
+</script>
+
+</body></html>
