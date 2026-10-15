@@ -51,6 +51,9 @@ input[type=text]:focus,select:focus{outline:2px solid var(--accent);outline-offs
 input[type=text]:disabled{opacity:.55}
 .seg{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);border-radius:5px;overflow:hidden}
 .seg.two{grid-template-columns:repeat(2,1fr)}
+.seg.six{grid-template-columns:repeat(3,1fr)}
+.seg.six label:nth-child(3n+1){border-left:0}
+.seg.six label:nth-child(n+4){border-top:1px solid var(--line)}
 .seg label{position:relative;text-align:center;font-size:12px;padding:7px 3px;cursor:pointer;border-left:1px solid var(--line);color:var(--ink);background:var(--bg);line-height:1.2}
 .seg label:first-child{border-left:0}
 .seg input{position:absolute;opacity:0;inset:0;cursor:pointer}
@@ -135,9 +138,10 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
   <form id="frm" autocomplete="off">
   <fieldset>
     <legend>Profiltype</legend>
-    <div class="seg" role="radiogroup" aria-label="Profiltype">
+    <div class="seg six" role="radiogroup" aria-label="Profiltype">
       <label><input type="radio" name="typ" id="typ-rolled" value="rolled" checked>Valset I/H</label>
       <label><input type="radio" name="typ" id="typ-welded" value="welded">Svejst I</label>
+      <label><input type="radio" name="typ" id="typ-tee" value="tee">Svejst T</label>
       <label><input type="radio" name="typ" id="typ-rhs" value="rhs">RHS/SHS</label>
       <label><input type="radio" name="typ" id="typ-chs" value="chs">CHS</label>
       <label><input type="radio" name="typ" id="typ-angle" value="angle">L-profil</label>
@@ -165,6 +169,17 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
         <label class="f">Underflange t<sub>f</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="w_tfb" value="20"></label>
         <label class="f">Kantsvejs a <span class="u">mm</span><input type="text" inputmode="decimal" id="w_a" value="5"></label>
       </div>
+    </div>
+
+    <div id="g-tee" style="display:grid;gap:10px" hidden>
+      <div class="row2">
+        <label class="f">Højde h <span class="u">mm</span><input type="text" inputmode="decimal" id="t_h" value="300"></label>
+        <label class="f">Krop t<sub>w</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="t_tw" value="10"></label>
+        <label class="f">Flange b <span class="u">mm</span><input type="text" inputmode="decimal" id="t_b" value="250"></label>
+        <label class="f">Flange t<sub>f</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="t_tf" value="15"></label>
+        <label class="f">Kantsvejs a <span class="u">mm</span><input type="text" inputmode="decimal" id="t_a" value="4"></label>
+      </div>
+      <p class="hint">h er den samlede højde. Flangen ligger øverst. Positivt M<sub>y,Ed</sub> giver tryk i flangen, negativt giver tryk i kroppens frie kant.</p>
     </div>
 
     <div id="g-rhs" style="display:grid;gap:10px" hidden>
@@ -384,6 +399,19 @@ const Core = (() => {
       ]
     };
   }
+  // Svejst T: flange øverst, kroppen er en udstående del med fri kant i underkant (z = 0) og rod ved svejsetåen
+  function buildTee({ h, tw, b, tf, a }) {
+    const w = a * S2;
+    return {
+      type: 'tee', name: `Svejst T ${h}×${tw} / ${b}×${tf}`, h, bmax: b, tmax: Math.max(tw, tf),
+      dims: { h, tw, b, tf, a },
+      shapes: [{ pts: rect(-tw / 2, tw / 2, 0, h - tf), s: 1 }, { pts: rect(-b / 2, b / 2, h - tf, h), s: 1 }],
+      elements: [
+        { id: 'web', label: 'Krop', kind: 'outstand', orient: 'v', c: h - tf - w, t: tw, zA: 0, zB: h - tf - w, yRanges: [[-tw / 2, tw / 2]], cDef: 'c = h − t<sub>f</sub> − √2·a (fri kant i underkant)' },
+        { id: 'ft', label: 'Flange', kind: 'outstand', orient: 'h', side: 'top', c: (b - tw) / 2 - w, t: tf, zRange: [h - tf, h], roots: [tw / 2 + w, -tw / 2 - w], cDef: 'c = (b − t<sub>w</sub>)/2 − √2·a' }
+      ]
+    };
+  }
   function rhsRadii(t, mfg) {
     if (mfg === 'hot') return [1.5 * t, 1.0 * t];
     const ro = t <= 6 ? 2 * t : t <= 10 ? 2.5 * t : 3 * t; return [ro, ro - t];
@@ -522,6 +550,18 @@ const Core = (() => {
     if (el.kind === 'chs') {
       out.lims = [50 * eps * eps, 70 * eps * eps, 90 * eps * eps];
       if (!st.anyComp) { out.note = 'Intet tryk'; out.lims = null; return out; }
+    } else if (el.orient === 'v' && el.kind === 'outstand') {
+      // Udstående del med spændingsgradient, tabel 5.2 ark 2. Fri kant ved zA, rod ved zB.
+      const sTip = st.sig(el.zA), sRoot = st.sig(el.zB), s1 = Math.max(sTip, sRoot);
+      const alpha = plCompLen(st.pl, el.zA, el.zB) / el.c;
+      if (s1 <= 1e-9 && alpha <= 1e-9) { out.note = 'Intet tryk'; return out; }
+      const tipPl = alpha >= 0.9999 || !st.pl.compTop; // plastisk: fri kant i tryk
+      const tipMax = sTip >= sRoot, psi = s1 > 1e-9 ? (tipMax ? sRoot / sTip : sTip / sRoot) : null;
+      out.alpha = alpha; out.psi = psi; out.tipMax = tipMax;
+      const d = tipPl ? alpha : alpha * Math.sqrt(alpha), lp = x => alpha <= 1e-9 ? Infinity : x * eps / d;
+      const l3 = psi === null ? Infinity : psi >= 0.9999 ? 14 * eps : 21 * eps * Math.sqrt(kSigmaOutstand(psi, tipMax));
+      out.lims = [lp(9), lp(10), l3];
+      out.note = alpha >= 0.9999 && psi !== null && psi >= 0.9999 ? 'Tryk' : tipMax ? 'Tryk i fri kant' : 'Tryk ved rod';
     } else if (el.orient === 'v') {
       const sA = st.sig(el.zA), sB = st.sig(el.zB), s1 = Math.max(sA, sB), s2 = Math.min(sA, sB);
       const alpha = plCompLen(st.pl, el.zA, el.zB) / el.c;
@@ -574,9 +614,23 @@ const Core = (() => {
     else { bc = c / (1 - psi); beff = rho * bc; be1 = 0.4 * beff; be2 = 0.6 * beff; hole = [be1, bc - be2]; }
     return { psi, k, lp, rho, bc, beff, be1, be2, hole: hole[1] - hole[0] > 1e-9 ? hole : null };
   }
-  function outstandWidths(c, t, eps) {
-    const k = 0.43, lp = (c / t) / (28.4 * eps * Math.sqrt(k)), rho = rhoOutstand(lp);
-    return { psi: 1, k, lp, rho, bc: c, beff: rho * c, be1: rho * c, be2: null, hole: rho < 1 ? [rho * c, c] : null };
+  // EN 1993-1-5 tabel 4.2. tipMax: største tryk i den frie kant
+  function kSigmaOutstand(psi, tipMax) {
+    psi = Math.max(Math.min(psi, 1), -3);
+    if (psi >= 1) return 0.43;
+    if (tipMax) return 0.57 - 0.21 * psi + 0.07 * psi * psi;
+    if (psi > 0) return 0.578 / (psi + 0.34);
+    if (psi === 0) return 1.70;
+    if (psi > -1) return 1.7 - 5 * psi + 17.1 * psi * psi;
+    return 23.8;
+  }
+  // Effektiv bredde for udstående del; hul angives som afstand fra roden (den understøttede kant)
+  function outstandWidths(c, t, eps, psi = 1, tipMax = true) {
+    const k = kSigmaOutstand(psi, tipMax), lp = (c / t) / (28.4 * eps * Math.sqrt(k)), rho = rhoOutstand(lp);
+    const bc = psi >= 0 ? c : c / (1 - psi), beff = rho * bc;
+    // ψ < 0 og tryk i fri kant: trækzonen ligger ved roden og er fuldt effektiv
+    const hole = psi < 0 && tipMax ? [c - bc + beff, c] : [beff, bc];
+    return { psi: Math.min(psi, 1), k, lp, rho, bc, beff, be1: beff, be2: null, hole: hole[1] - hole[0] > 1e-9 ? hole : null };
   }
 
   function holesForUniform(el, eps) {
@@ -584,6 +638,11 @@ const Core = (() => {
     if (el.orient === 'h' && el.kind === 'outstand') {
       const w = outstandWidths(el.c, el.t, eps);
       if (w.hole) for (const r of el.roots) { const d = Math.sign(r); holes.push(rect(Math.min(r + d * w.hole[0], r + d * w.hole[1]), Math.max(r + d * w.hole[0], r + d * w.hole[1]), el.zRange[0], el.zRange[1])); }
+      return { w, holes };
+    }
+    if (el.orient === 'v' && el.kind === 'outstand') {
+      const w = outstandWidths(el.c, el.t, eps);
+      if (w.hole) for (const yr of el.yRanges) holes.push(rect(yr[0], yr[1], el.zB - w.hole[1], el.zB - w.hole[0]));
       return { w, holes };
     }
     const w = internalWidths(el.c, el.t, 1, eps);
@@ -597,6 +656,12 @@ const Core = (() => {
     const sA = sign * (el.zA - zna), sB = sign * (el.zB - zna);
     const topComp = sB >= sA, s1 = Math.max(sA, sB), s2 = Math.min(sA, sB);
     if (s1 <= 0) return { w: null, holes: [] };
+    if (el.kind === 'outstand') { // T-krop: fri kant ved zA, rod ved zB
+      const tipMax = sA >= sB, w = outstandWidths(el.c, el.t, eps, s2 / s1, tipMax), holes = [];
+      if (w.hole) for (const yr of el.yRanges) holes.push(rect(yr[0], yr[1], el.zB - w.hole[1], el.zB - w.hole[0]));
+      w.topComp = !tipMax;
+      return { w, holes };
+    }
     const psi = s2 / s1, w = internalWidths(el.c, el.t, psi, eps), holes = [];
     if (w.hole) for (const yr of el.yRanges) {
       const z0 = topComp ? el.zB - w.hole[1] : el.zA + w.hole[0], z1 = topComp ? el.zB - w.hole[0] : el.zA + w.hole[1];
@@ -707,7 +772,7 @@ const Core = (() => {
     return { sec, fy, eps, gM0, fyd, G, NEd, MEd, cN, cM, cC, effN, effMp, effMn, R, I };
   }
 
-  return { LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, gammaM0, buildRolled, buildRolledDims, buildWelded, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, internalWidths, outstandWidths };
+  return { LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, gammaM0, buildRolled, buildRolledDims, buildWelded, buildTee, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, kSigmaOutstand, internalWidths, outstandWidths };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
 </script>
@@ -764,6 +829,14 @@ function buildSection() {
     need(p.tft + p.tfb + 2 * Math.SQRT2 * p.a < p.h, 'Flangetykkelser og svejsninger fylder mere end profilhøjden.');
     need(p.bt > p.tw + 2 * Math.SQRT2 * p.a && p.bb > p.tw + 2 * Math.SQRT2 * p.a, 'Flangebredden skal være større end t<sub>w</sub> + 2√2·a.');
     return Core.buildWelded(p);
+  }
+  if (t === 'tee') {
+    const p = { h: num('t_h'), tw: num('t_tw'), b: num('t_b'), tf: num('t_tf'), a: num('t_a') };
+    need(['h', 'tw', 'b', 'tf'].every(k => p[k] > 0), 'Alle pladedimensioner skal være positive tal.');
+    need(p.a >= 0, 'Kantsvejsens a-mål skal være 0 eller større.');
+    need(p.tf + Math.SQRT2 * p.a < p.h, 'Flangetykkelse og svejsning fylder mere end profilhøjden.');
+    need(p.b > p.tw + 2 * Math.SQRT2 * p.a, 'Flangebredden skal være større end t<sub>w</sub> + 2√2·a.');
+    return Core.buildTee(p);
   }
   if (t === 'rhs') {
     const p = { h: num('r_h'), b: num('r_b'), t: num('r_t'), mfg: radio('mfg') };
@@ -880,7 +953,7 @@ function widthRows(eff, title, eps) {
 /* ---------- Render ---------- */
 function render() {
   const out = $('out');
-  ['rolled', 'welded', 'rhs', 'chs', 'angle'].forEach(t => $('g-' + t).hidden = typ() !== t);
+  ['rolled', 'welded', 'tee', 'rhs', 'chs', 'angle'].forEach(t => $('g-' + t).hidden = typ() !== t);
   $('MEd').disabled = typ() === 'angle';
   $('fyManBox').hidden = !$('fyMan').checked;
   $('naBox').hidden = radio('sit') === 'ulykke';
@@ -1033,6 +1106,7 @@ function render() {
     <li>γ<sub>M0</sub> = 1,1·γ<sub>0</sub>·γ<sub>3</sub> efter DS/EN 1993-1-1 DK NA:2019, 6.1(1). γ<sub>0</sub> = 1,0 for lastkombination 1–2, K<sub>FI</sub> for 3–4 og 1,2·K<sub>FI</sub> for 5. Ved ulykke og seismik er γ<sub>M0</sub> = 1,0.</li>
     <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
     <li>L-profiler: benene kontrolleres som udstående dele med c = ben − t − r<sub>1</sub>, og vinklen efter tabel 5.2 ark 3 (h/t ≤ 15ε og (b + h)/2t ≤ 11,5ε, ellers klasse 4). Ark 3 gælder ikke for vinkler i kontinuert kontakt med andre dele. Effektive bredder med b̄ = benlængden og k<sub>σ</sub> = 0,43. Kun normalkraft.</li>
+    <li>Svejste T-profiler: kroppen er en udstående del (tabel 5.2 ark 2) med fri kant i underkant. Klasse 1–2 med 9ε/α og 10ε/α, når den frie kant er i tryk, ellers 9ε/(α√α) og 10ε/(α√α). Klasse 3 med 21ε√k<sub>σ</sub> (14ε ved ren tryk), og effektive bredder med k<sub>σ</sub> og ψ efter EN 1993-1-5 tabel 4.2.</li>
     <li>c-mål efter tabel 5.2. Valsede profiler: fradrag for rodradius r. Svejste profiler: fradrag √2·a for kantsvejs. RHS: c = h − 3t og b − 3t (konservativt).</li>
     <li>Kun dele i klasse 4 reduceres. A<sub>eff</sub> bestemmes ved ren tryk og W<sub>eff</sub> ved ren bøjning, jf. EN 1993-1-5, 4.3(3)–(4). ρ for indre dele bruger grænsen λ̄<sub>p</sub> ≤ 0,5 + √(0,085 − 0,055ψ).</li>
     <li>Flanger regnes med ψ fra bruttotværsnittet. Kroppens ψ bestemmes med effektiv trykflange og brutto krop, jf. EN 1993-1-5, 4.4(3).</li>
