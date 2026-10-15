@@ -813,6 +813,11 @@ const Core = (() => {
       I.terms = { Aeff, eN, dM: -NEd * eN, Mtot, Weff: W, tN: Math.abs(NEd) / (Aeff * fyd), tM: Math.abs(Mtot) / (W * fyd) };
       I.util = I.terms.tN + I.terms.tM;
     }
+    // Klasse 1–3 ved N + M, men klasse 4 ved ren tryk: N_Ed ≤ N_c,Rd (6.2.4) skal også gælde,
+    // ellers kan et lille moment give lavere udnyttelse end ren tryk
+    if (k <= 3 && NEd > 0 && cN.cls === 4 && R.NcRd && I.util != null) {
+      I.terms.nc = NEd / R.NcRd; I.util = Math.max(I.util, I.terms.nc);
+    }
     return { sec, fy, eps, gM0, fyd, G, NEd, MEd, cN, cM, cC, effN, effMp, effMn, R, I };
   }
 
@@ -1172,6 +1177,7 @@ function render() {
         <div>W<sub>eff,min</sub> = ${f(T.Weff / 1e3, 1)}·10³ mm³ (for M = ${f(T.Mtot / 1e6, 1)} kNm)</div>
         <div>${f(T.tN, 3)} + ${f(T.tM, 3)} = <b>${f(I.util, 3)}</b></div>`;
     } else fl = `<div>${I.method}</div>`;
+    if (T.nc != null) fl += `<div>Desuden ren tryk (6.2.4), klasse 4: N<sub>Ed</sub>/N<sub>c,Rd</sub> = N<sub>Ed</sub>/(A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub>) = ${f(T.nc, 3)}${T.nc >= I.util - 1e-12 ? ' <b>(bestemmende)</b>' : ''}</div>`;
     h += `<section class="card"><h2>Tværsnitsbæreevne</h2><p class="sub">EN 1993-1-1 6.2 med γ<sub>M0</sub> = ${f(gm.g, 3)}</p>
       <div class="tbl"><table><tbody>
         <tr><td>N<sub>pl,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub></td><td class="num">${f(res.R.Npl / 1e3, 1)} kN</td></tr>
@@ -1187,7 +1193,7 @@ function render() {
   h += `<section class="card"><h2>Forudsætninger</h2><p class="sub">Hvad programmet regner, og hvad det ikke dækker</p><ul class="notes">
     <li>f<sub>y</sub> = R<sub>eH</sub> fra produktstandarden (DK NA 3.2.1: valgmulighed a): EN 10025-2 for S235–S355 og S450, EN 10025-3/-4 for S420 og S460, med tykkelsestrin 16, 40, 63, 80 og 100 mm. Hulprofiler efter EN 10210/10219 har samme værdier. f<sub>y</sub> bestemmes ud fra profilets største godstykkelse.</li>
     <li>γ<sub>M0</sub> = 1,1·γ<sub>0</sub>·γ<sub>3</sub> efter DS/EN 1993-1-1 DK NA:2019, 6.1(1). γ<sub>0</sub> = 1,0 for lastkombination 1–2, K<sub>FI</sub> for 3–4 og 1,2·K<sub>FI</sub> for 5. Ved ulykke og seismik er γ<sub>M0</sub> = 1,0.</li>
-    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling for dobbeltsymmetriske tværsnit (valsede og symmetriske svejste I-profiler, RHS, CHS) med nullinjen bestemt af N<sub>Ed</sub> alene, så momentet tager resten af tværsnittet. For øvrige tværsnit (fx T-profiler og usymmetriske I-profiler) findes den ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
+    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling for dobbeltsymmetriske tværsnit (valsede og symmetriske svejste I-profiler, RHS, CHS) med nullinjen bestemt af N<sub>Ed</sub> alene, så momentet tager resten af tværsnittet. For øvrige tværsnit (fx T-profiler og usymmetriske I-profiler) findes den ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele. Er tværsnittet klasse 4 ved ren tryk, men klasse 1–3 ved N + M, kontrolleres N<sub>Ed</sub> ≤ N<sub>c,Rd</sub> = A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub> også, så et lille moment aldrig giver lavere udnyttelse end ren tryk.</li>
     <li>L-profiler: benene kontrolleres som udstående dele med c = ben − t − r<sub>1</sub>, og vinklen efter tabel 5.2 ark 3 (h/t ≤ 15ε og (b + h)/2t ≤ 11,5ε, ellers klasse 4). Ark 3 gælder ikke for vinkler i kontinuert kontakt med andre dele. Effektive bredder med b̄ = benlængden og k<sub>σ</sub> = 0,43. Kun normalkraft.</li>
     <li>Svejste T-profiler: kroppen er en udstående del (tabel 5.2 ark 2) med fri kant i underkant. Klasse 1–2 med 9ε/α og 10ε/α, når den frie kant er i tryk, ellers 9ε/(α√α) og 10ε/(α√α). Klasse 3 med 21ε√k<sub>σ</sub> (14ε ved ren tryk), og effektive bredder med k<sub>σ</sub> og ψ efter EN 1993-1-5 tabel 4.2.</li>
     <li>c-mål efter tabel 5.2. Valsede profiler: fradrag for rodradius r. Svejste profiler: fradrag √2·a for kantsvejs. RHS: c = h − 3t og b − 3t (konservativt).</li>
