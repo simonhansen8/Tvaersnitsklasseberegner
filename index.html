@@ -560,6 +560,8 @@ const Core = (() => {
   }
 
   /* ---------- Spændingstilstand for klassifikation ---------- */
+  const doublySym = sec => { const d = sec.dims || {};
+    return sec.type === 'rolled' || sec.type === 'rhs' || sec.type === 'chs' || (sec.type === 'welded' && d.bt === d.bb && d.tft === d.tfb); };
   function loadState(sec, G, fy, N, M) {
     const Npl = G.A * fy; // fy her = fy/γM0 (regningsmæssig plastisk tilstand)
     const sig = z => N / G.A + M * (z - G.zc) / G.Iy;
@@ -567,8 +569,9 @@ const Core = (() => {
     if (Math.abs(M) < 1e-9) pl = N > 0 ? { all: 'comp' } : N < 0 ? { all: 'tens' } : { all: 'none' };
     else if (Math.abs(N) >= Npl) pl = N > 0 ? { all: 'comp' } : { all: 'tens' };
     else { const compTop = M > 0; const z0 = plasticNA(sec, G.A, N / fy, compTop);
-      // Forholdsvis last; aldrig mindre trykzone end med N_Ed alene (overbelastede tværsnit)
-      const zr = Math.abs(N) < 1e-9 ? z0 : proportionalNA(sec, G, N, M, compTop);
+      // Dobbeltsymmetriske tværsnit: nullinjen fra N_Ed alene (almindelig praksis).
+      // Øvrige: forholdsvis last; aldrig mindre trykzone end med N_Ed alene (overbelastede tværsnit)
+      const zr = Math.abs(N) < 1e-9 || doublySym(sec) ? z0 : proportionalNA(sec, G, N, M, compTop);
       pl = { compTop, zp: compTop ? Math.min(z0, zr) : Math.max(z0, zr) }; }
     return { N, M, sig, pl, anyComp: N > 0 || Math.abs(M) > 1e-9 };
   }
@@ -1184,7 +1187,7 @@ function render() {
   h += `<section class="card"><h2>Forudsætninger</h2><p class="sub">Hvad programmet regner, og hvad det ikke dækker</p><ul class="notes">
     <li>f<sub>y</sub> = R<sub>eH</sub> fra produktstandarden (DK NA 3.2.1: valgmulighed a): EN 10025-2 for S235–S355 og S450, EN 10025-3/-4 for S420 og S460, med tykkelsestrin 16, 40, 63, 80 og 100 mm. Hulprofiler efter EN 10210/10219 har samme værdier. f<sub>y</sub> bestemmes ud fra profilets største godstykkelse.</li>
     <li>γ<sub>M0</sub> = 1,1·γ<sub>0</sub>·γ<sub>3</sub> efter DS/EN 1993-1-1 DK NA:2019, 6.1(1). γ<sub>0</sub> = 1,0 for lastkombination 1–2, K<sub>FI</sub> for 3–4 og 1,2·K<sub>FI</sub> for 5. Ved ulykke og seismik er γ<sub>M0</sub> = 1,0.</li>
-    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
+    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling for dobbeltsymmetriske tværsnit (valsede og symmetriske svejste I-profiler, RHS, CHS) med nullinjen bestemt af N<sub>Ed</sub> alene, så momentet tager resten af tværsnittet. For øvrige tværsnit (fx T-profiler og usymmetriske I-profiler) findes den ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele.</li>
     <li>L-profiler: benene kontrolleres som udstående dele med c = ben − t − r<sub>1</sub>, og vinklen efter tabel 5.2 ark 3 (h/t ≤ 15ε og (b + h)/2t ≤ 11,5ε, ellers klasse 4). Ark 3 gælder ikke for vinkler i kontinuert kontakt med andre dele. Effektive bredder med b̄ = benlængden og k<sub>σ</sub> = 0,43. Kun normalkraft.</li>
     <li>Svejste T-profiler: kroppen er en udstående del (tabel 5.2 ark 2) med fri kant i underkant. Klasse 1–2 med 9ε/α og 10ε/α, når den frie kant er i tryk, ellers 9ε/(α√α) og 10ε/(α√α). Klasse 3 med 21ε√k<sub>σ</sub> (14ε ved ren tryk), og effektive bredder med k<sub>σ</sub> og ψ efter EN 1993-1-5 tabel 4.2.</li>
     <li>c-mål efter tabel 5.2. Valsede profiler: fradrag for rodradius r. Svejste profiler: fradrag √2·a for kantsvejs. RHS: c = h − 3t og b − 3t (konservativt).</li>
