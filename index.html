@@ -51,9 +51,9 @@ input[type=text]:focus,select:focus{outline:2px solid var(--accent);outline-offs
 input[type=text]:disabled{opacity:.55}
 .seg{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);border-radius:5px;overflow:hidden}
 .seg.two{grid-template-columns:repeat(2,1fr)}
-.seg.six{grid-template-columns:repeat(3,1fr)}
-.seg.six label:nth-child(3n+1){border-left:0}
-.seg.six label:nth-child(n+4){border-top:1px solid var(--line)}
+.seg.seven{grid-template-columns:repeat(4,1fr)}
+.seg.seven label:nth-child(4n+1){border-left:0}
+.seg.seven label:nth-child(n+5){border-top:1px solid var(--line)}
 .seg label{position:relative;text-align:center;font-size:12px;padding:7px 3px;cursor:pointer;border-left:1px solid var(--line);color:var(--ink);background:var(--bg);line-height:1.2}
 .seg label:first-child{border-left:0}
 .seg input{position:absolute;opacity:0;inset:0;cursor:pointer}
@@ -141,10 +141,11 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
   <form id="frm" autocomplete="off">
   <fieldset>
     <legend>Profiltype</legend>
-    <div class="seg six" role="radiogroup" aria-label="Profiltype">
+    <div class="seg seven" role="radiogroup" aria-label="Profiltype">
       <label><input type="radio" name="typ" id="typ-rolled" value="rolled" checked>Valset I/H</label>
       <label><input type="radio" name="typ" id="typ-welded" value="welded">Svejst I</label>
       <label><input type="radio" name="typ" id="typ-tee" value="tee">Svejst T</label>
+      <label><input type="radio" name="typ" id="typ-channel" value="channel">Svejst C</label>
       <label><input type="radio" name="typ" id="typ-rhs" value="rhs">RHS/SHS</label>
       <label><input type="radio" name="typ" id="typ-chs" value="chs">CHS</label>
       <label><input type="radio" name="typ" id="typ-angle" value="angle">L-profil</label>
@@ -183,6 +184,17 @@ tr.cur td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
         <label class="f">Kantsvejs a <span class="u">mm</span><input type="text" inputmode="decimal" id="t_a" value="4"></label>
       </div>
       <p class="hint">h er den samlede højde. Flangen ligger øverst. Positivt M<sub>y,Ed</sub> giver tryk i flangen, negativt giver tryk i kroppens frie kant.</p>
+    </div>
+
+    <div id="g-channel" style="display:grid;gap:10px" hidden>
+      <div class="row2">
+        <label class="f">Højde h <span class="u">mm</span><input type="text" inputmode="decimal" id="ch_h" value="360"></label>
+        <label class="f">Krop t<sub>w</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="ch_tw" value="10"></label>
+        <label class="f">Flange b <span class="u">mm</span><input type="text" inputmode="decimal" id="ch_b" value="500"></label>
+        <label class="f">Flange t<sub>f</sub> <span class="u">mm</span><input type="text" inputmode="decimal" id="ch_tf" value="15"></label>
+        <label class="f">Kantsvejs a <span class="u">mm</span><input type="text" inputmode="decimal" id="ch_a" value="5"></label>
+      </div>
+      <p class="hint">h er den samlede højde, og b er flangens fulde bredde inkl. kroppen. Kroppen sidder i flangernes ende, og kantsvejsen ligger på indersiden. Ved klasse 4 flytter A<sub>eff</sub> tyngdepunktet ind mod kroppen, og tillægsmomentet om z-aksen tages med.</p>
     </div>
 
     <div id="g-rhs" style="display:grid;gap:10px" hidden>
@@ -370,15 +382,16 @@ const Core = (() => {
   }
 
   // Højde af effektivt materiale [zLo, zHi]. Ineffektive dele ved kanten (fx T-kroppens frie kant) flytter yderfiberen.
-  function extentZ(shapes, h) {
-    const A = sumProps(shapes).A, tol = 1e-9 * A, dz = 1e-4 * h, find = above => {
-      if (sumProps(shapes, [1, above ? h - dz : dz, above]).A > tol) return above ? h : 0; // materiale helt ud til kanten
-      let lo = 0, hi = h;
-      for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2, a = sumProps(shapes, [1, m, above]).A; if (above ? a > tol : a <= tol) lo = m; else hi = m; }
+  function extentAx(shapes, ax, a0, a1) {
+    const A = sumProps(shapes).A, tol = 1e-9 * A, d = 1e-4 * (a1 - a0), find = above => {
+      if (sumProps(shapes, [ax, above ? a1 - d : a0 + d, above]).A > tol) return above ? a1 : a0; // materiale helt ud til kanten
+      let lo = a0, hi = a1;
+      for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2, a = sumProps(shapes, [ax, m, above]).A; if (above ? a > tol : a <= tol) lo = m; else hi = m; }
       return (lo + hi) / 2;
     };
     return [find(false), find(true)];
   }
+  const extentZ = (shapes, h) => extentAx(shapes, 1, 0, h);
   // Effektive tværsnitskonstanter med W målt til det effektive materiales yderfibre
   function effProps(shapes, h, yMax) {
     const P = sectionProps(shapes, h, yMax), [zLo, zHi] = extentZ(shapes, h);
@@ -434,6 +447,20 @@ const Core = (() => {
       elements: [
         { id: 'web', label: 'Krop', kind: 'outstand', orient: 'v', c: h - tf - w, t: tw, zA: 0, zB: h - tf - w, yRanges: [[-tw / 2, tw / 2]], cDef: 'c = h − t<sub>f</sub> − √2·a (fri kant i underkant)' },
         { id: 'ft', label: 'Flange', kind: 'outstand', orient: 'h', side: 'top', c: (b - tw) / 2 - w, t: tf, zRange: [h - tf, h], roots: [tw / 2 + w, -tw / 2 - w], cDef: 'c = (b − t<sub>w</sub>)/2 − √2·a' }
+      ]
+    };
+  }
+  // Svejst C: kroppen til venstre (ryg i y = −b/2), flangerne stikker ud mod højre. Kantsvejs kun på indersiden.
+  function buildChannel({ h, tw, b, tf, a }) {
+    const w = a * S2, y0 = -b / 2, root = y0 + tw + w;
+    return {
+      type: 'channel', name: `Svejst C ${h}×${tw} / ${b}×${tf}`, h, bmax: b, tmax: Math.max(tw, tf),
+      dims: { h, tw, b, tf, a },
+      shapes: [{ pts: rect(y0, b / 2, 0, tf), s: 1 }, { pts: rect(y0, y0 + tw, tf, h - tf), s: 1 }, { pts: rect(y0, b / 2, h - tf, h), s: 1 }],
+      elements: [
+        { id: 'web', label: 'Krop', kind: 'internal', orient: 'v', c: h - 2 * tf - 2 * w, t: tw, zA: tf + w, zB: h - tf - w, yRanges: [[y0, y0 + tw]], cDef: 'c = h − 2t<sub>f</sub> − 2√2·a' },
+        { id: 'ft', label: 'Overflange', kind: 'outstand', orient: 'h', side: 'top', c: b - tw - w, t: tf, zRange: [h - tf, h], roots: [root], dirs: [1], cDef: 'c = b − t<sub>w</sub> − √2·a' },
+        { id: 'fb', label: 'Underflange', kind: 'outstand', orient: 'h', side: 'bot', c: b - tw - w, t: tf, zRange: [0, tf], roots: [root], dirs: [1], cDef: 'c = b − t<sub>w</sub> − √2·a' }
       ]
     };
   }
@@ -561,7 +588,7 @@ const Core = (() => {
 
   /* ---------- Spændingstilstand for klassifikation ---------- */
   const doublySym = sec => { const d = sec.dims || {};
-    return sec.type === 'rolled' || sec.type === 'rhs' || sec.type === 'chs' || (sec.type === 'welded' && d.bt === d.bb && d.tft === d.tfb); };
+    return sec.type === 'rolled' || sec.type === 'rhs' || sec.type === 'chs' || sec.type === 'channel' || (sec.type === 'welded' && d.bt === d.bb && d.tft === d.tfb); };
   function loadState(sec, G, fy, N, M) {
     const Npl = G.A * fy; // fy her = fy/γM0 (regningsmæssig plastisk tilstand)
     const sig = z => N / G.A + M * (z - G.zc) / G.Iy;
@@ -681,7 +708,7 @@ const Core = (() => {
     const holes = [];
     if (el.orient === 'h' && el.kind === 'outstand') {
       const w = outstandWidths(el.c, el.t, eps);
-      if (w.hole) for (const r of el.roots) { const d = Math.sign(r); holes.push(rect(Math.min(r + d * w.hole[0], r + d * w.hole[1]), Math.max(r + d * w.hole[0], r + d * w.hole[1]), el.zRange[0], el.zRange[1])); }
+      if (w.hole) el.roots.forEach((r, i) => { const d = el.dirs ? el.dirs[i] : Math.sign(r); holes.push(rect(Math.min(r + d * w.hole[0], r + d * w.hole[1]), Math.max(r + d * w.hole[0], r + d * w.hole[1]), el.zRange[0], el.zRange[1])); });
       return { w, holes };
     }
     if (el.orient === 'v' && el.kind === 'outstand') {
@@ -724,7 +751,8 @@ const Core = (() => {
     });
     const shapes = [...sec.shapes, ...holes.map(p => ({ pts: p, s: -1 }))];
     const P = effProps(shapes, sec.h, sec.bmax / 2);
-    return { shapes, holes, det, A: P.A, zc: P.zc, eN: P.zc - G.zc, P };
+    const eN = Math.abs(P.zc - G.zc) < 1e-6 * sec.h ? 0 : P.zc - G.zc; // symmetriske tværsnit: ingen afrundingsstøj
+    return { shapes, holes, det, A: P.A, zc: P.zc, eN, P };
   }
   // Effektivt tværsnit ved ren bøjning (Weff); sign = +1: tryk i overside
   function effectiveBending(sec, G, clsM, eps, sign, iterate) {
@@ -756,9 +784,12 @@ const Core = (() => {
     const { fy, gM0, NEd, MEd, iterate } = opts; // NEd [N], MEd [Nmm]
     const eps = Math.sqrt(235 / fy), fyd = fy / gM0;
     const G = sectionProps(sec.shapes, sec.h, sec.bmax / 2);
-    const right = sumProps(sec.shapes, [0, 0, true]);
-    const zpl0 = plasticNA(sec, G.A, 0, true);
-    G.Wpl = plasticMoment(sec, zpl0, G.zc, true); G.Wplz = 2 * right.Qy; G.Welmin = Math.min(G.WyTop, G.WyBot); G.zpl = zpl0;
+    const zpl0 = plasticNA(sec, G.A, 0, true), B = sec.bmax / 2;
+    let ylo = -B, yhi = B; // plastisk nullinje for bøjning om z: halvdelen af arealet på hver side
+    for (let i = 0; i < 80; i++) { const m = (ylo + yhi) / 2; if (sumProps(sec.shapes, [0, m, true]).A > G.A / 2) ylo = m; else yhi = m; }
+    const ypl = (ylo + yhi) / 2, right = sumProps(sec.shapes, [0, ypl, true]), left = sumProps(sec.shapes, [0, ypl, false]);
+    G.Wpl = plasticMoment(sec, zpl0, G.zc, true); G.Wplz = (right.Qy - ypl * right.A) - (left.Qy - ypl * left.A); G.Welmin = Math.min(G.WyTop, G.WyBot); G.zpl = zpl0;
+    G.Wz = G.Iz / (B + Math.abs(G.yc));
     const mSign = MEd < 0 ? -1 : 1;
     const cN = classify(sec, G, fyd, eps, 1, 0);
     const cM = classify(sec, G, fyd, eps, 0, mSign);
@@ -766,6 +797,13 @@ const Core = (() => {
     const cMp = classify(sec, G, fyd, eps, 0, 1), cMn = classify(sec, G, fyd, eps, 0, -1);
     const isCHS = sec.type === 'chs';
     const effN = cN.cls === 4 && !isCHS ? effectiveCompression(sec, G, cN, eps) : null;
+    // C-profil: A_eff flytter også tyngdepunktet vandret (e_N,y) og giver et tillægsmoment om z-aksen
+    const yShift = sec.type === 'channel' && effN;
+    if (yShift) {
+      const [yLo, yHi] = extentAx(effN.shapes, 0, -sec.bmax / 2, sec.bmax / 2);
+      effN.eNy = effN.P.yc - G.yc; effN.yLo = yLo; effN.yHi = yHi; effN.Wz = effN.P.Iz / Math.max(yHi - effN.P.yc, effN.P.yc - yLo);
+    }
+    const tZ = N => yShift && N > 0 ? Math.abs(N * effN.eNy) / (effN.Wz * fyd) : 0;
     const effMp = !isCHS && cMp.cls === 4 ? effectiveBending(sec, G, cMp, eps, 1, iterate) : null;
     const effMn = !isCHS && cMn.cls === 4 ? effectiveBending(sec, G, cMn, eps, -1, iterate) : null;
 
@@ -811,17 +849,19 @@ const Core = (() => {
       const effM = Mtot >= 0 ? effMp : effMn;
       const W = effM ? effM.Wmin : G.Welmin;
       I.terms = { Aeff, eN, dM: -NEd * eN, Mtot, Weff: W, tN: Math.abs(NEd) / (Aeff * fyd), tM: Math.abs(Mtot) / (W * fyd) };
-      I.util = I.terms.tN + I.terms.tM;
+      if (yShift && comp) Object.assign(I.terms, { eNy: effN.eNy, dMz: NEd * effN.eNy, Weffz: effN.Wz, tZ: tZ(NEd) });
+      I.util = I.terms.tN + I.terms.tM + (I.terms.tZ || 0);
     }
     // Klasse 1–3 ved N + M, men klasse 4 ved ren tryk: N_Ed ≤ N_c,Rd (6.2.4) skal også gælde,
     // ellers kan et lille moment give lavere udnyttelse end ren tryk
     if (k <= 3 && NEd > 0 && cN.cls === 4 && R.NcRd && I.util != null) {
-      I.terms.nc = NEd / R.NcRd; I.util = Math.max(I.util, I.terms.nc);
+      I.terms.nc = NEd / R.NcRd + tZ(NEd); if (yShift) I.terms.ncZ = tZ(NEd);
+      I.util = Math.max(I.util, I.terms.nc);
     }
     return { sec, fy, eps, gM0, fyd, G, NEd, MEd, cN, cM, cC, effN, effMp, effMn, R, I };
   }
 
-  return { LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, fyRange, gammaM0, buildRolled, buildRolledDims, buildWelded, buildTee, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, kSigmaOutstand, internalWidths, outstandWidths };
+  return { LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, fyRange, gammaM0, buildRolled, buildRolledDims, buildWelded, buildTee, buildChannel, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, kSigmaOutstand, internalWidths, outstandWidths };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
 </script>
@@ -920,6 +960,14 @@ function buildSection() {
     need(p.b > p.tw + 2 * Math.SQRT2 * p.a, 'Flangebredden skal være større end t<sub>w</sub> + 2√2·a.');
     return Core.buildTee(p);
   }
+  if (t === 'channel') {
+    const p = { h: num('ch_h'), tw: num('ch_tw'), b: num('ch_b'), tf: num('ch_tf'), a: num('ch_a') };
+    need(['h', 'tw', 'b', 'tf'].every(k => p[k] > 0), 'Alle pladedimensioner skal være positive tal.');
+    need(p.a >= 0, 'Kantsvejsens a-mål skal være 0 eller større.');
+    need(2 * p.tf + 2 * Math.SQRT2 * p.a < p.h, 'Flangetykkelser og svejsninger fylder mere end profilhøjden.');
+    need(p.b > p.tw + Math.SQRT2 * p.a, 'Flangebredden skal være større end t<sub>w</sub> + √2·a.');
+    return Core.buildChannel(p);
+  }
   if (t === 'rhs') {
     const p = { h: num('r_h'), b: num('r_b'), t: num('r_t'), mfg: radio('mfg') };
     need(p.h > 0 && p.b > 0 && p.t > 0, 'h, b og t skal være positive tal.');
@@ -976,6 +1024,15 @@ function svgSection(res, eff) {
   if (eff && Math.abs(eff.zc - G.zc) > 1e-3) {
     out += `<line x1="${xa}" y1="${Y(eff.zc)}" x2="${xb}" y2="${Y(eff.zc)}" style="stroke:var(--k4);stroke-width:1.1;stroke-dasharray:5 3"/>`;
     out += `<text x="${xb + 4}" y="${Y(eff.zc) + (eff.zc > G.zc ? -3 : 12)}" style="fill:var(--k4);font:11px var(--f-body)">TP<tspan dy="3" font-size="8">eff</tspan></text>`;
+  }
+  if (sec.type === 'channel') {
+    const ya = Y(sec.h) - 10, yb = Y(0) + 10;
+    out += `<line x1="${X(G.yc)}" y1="${ya}" x2="${X(G.yc)}" y2="${yb}" style="stroke:var(--ink);stroke-width:.9;stroke-dasharray:8 3 2 3"/>`;
+    if (eff && eff.P && Math.abs(eff.P.yc - G.yc) > 1e-3) {
+      out += `<line x1="${X(eff.P.yc)}" y1="${ya}" x2="${X(eff.P.yc)}" y2="${yb}" style="stroke:var(--k4);stroke-width:1.1;stroke-dasharray:5 3"/>`;
+      out += `<circle cx="${X(eff.P.yc)}" cy="${Y(eff.zc)}" r="3.2" style="fill:var(--k4)"/>`;
+    }
+    out += `<circle cx="${X(G.yc)}" cy="${Y(G.zc)}" r="3.2" style="fill:var(--ink)"/>`;
   }
   if (sec.type === 'angle') {
     const yc = G.yc, zc = G.zc, Lh = 0.62 * Math.max(sec.h, sec.bmax);
@@ -1041,7 +1098,7 @@ function widthRows(eff, title, eps) {
 function render() {
   const out = $('out');
   saveState();
-  ['rolled', 'welded', 'tee', 'rhs', 'chs', 'angle'].forEach(t => $('g-' + t).hidden = typ() !== t);
+  ['rolled', 'welded', 'tee', 'channel', 'rhs', 'chs', 'angle'].forEach(t => $('g-' + t).hidden = typ() !== t);
   $('MEd').disabled = typ() === 'angle';
   $('fyManBox').hidden = !$('fyMan').checked;
   $('naBox').hidden = radio('sit') === 'ulykke';
@@ -1157,6 +1214,12 @@ function render() {
     const ncol = 1 + (res.effN ? 1 : 0) + (showP ? 1 : 0) + (showM ? 1 : 0);
     const extra = (lbl, u, v, d) => `<tr><td>${lbl}</td><td>${u}</td><td class="num">${f(v, d)}</td>${'<td class="num na">–</td>'.repeat(ncol - 1)}</tr>`;
     h += extra('W<sub>pl,y</sub>', '10³ mm³', G.Wpl / 1e3, 1) + extra('I<sub>z</sub>', '10⁶ mm⁴', G.Iz / 1e6, 2) + extra('W<sub>el,z</sub>', '10³ mm³', G.Wz / 1e3, 1) + extra('W<sub>pl,z</sub>', '10³ mm³', G.Wplz / 1e3, 1);
+    if (sec.type === 'channel') {
+      const b2 = sec.bmax / 2, effCols = [res.effN, res.effMp, res.effMn].filter((E, i) => i === 0 ? E : i === 1 ? showP : showM);
+      h += `<tr><td>y<sub>c</sub> fra krop, udvendig side</td><td>mm</td><td class="num">${f(G.yc + b2, 1)}</td>${effCols.map(E => `<td class="num">${f(E.P.yc + b2, 1)}</td>`).join('')}</tr>`;
+      if (res.effN) h += `<tr><td>W<sub>eff,z</sub> (fra A<sub>eff</sub>)</td><td>10³ mm³</td><td class="num na">–</td><td class="num">${f(res.effN.Wz / 1e3, 1)}</td>${'<td class="num na">–</td>'.repeat(ncol - 2)}</tr>
+        <tr><td>e<sub>N,y</sub> = y<sub>c,eff</sub> − y<sub>c</sub></td><td>mm</td><td class="num na">–</td><td class="num">${f(res.effN.eNy, 1)}</td>${'<td class="num na">–</td>'.repeat(ncol - 2)}</tr>`;
+    }
     if (res.effN) h += `<tr><td>e<sub>N</sub> = z<sub>c</sub> − z<sub>c,eff</sub></td><td>mm</td><td class="num na">–</td><td class="num">${f(-res.effN.eN, 1)}</td>${'<td class="num na">–</td>'.repeat(ncol - 2)}</tr>`;
     h += `</tbody></table></div></section>`;
 
@@ -1175,9 +1238,10 @@ function render() {
       fl = `<div>N<sub>Ed</sub>/(A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub>) + (M<sub>y,Ed</sub> + N<sub>Ed</sub>·e<sub>N</sub>)/(W<sub>eff,min</sub>·f<sub>y</sub>/γ<sub>M0</sub>) ≤ 1</div>
         <div>A<sub>eff</sub> = ${f(T.Aeff, 0)} mm², e<sub>N</sub> = ${f(-T.eN, 1)} mm, N<sub>Ed</sub>·e<sub>N</sub> = ${f(T.dM / 1e6, 1)} kNm</div>
         <div>W<sub>eff,min</sub> = ${f(T.Weff / 1e3, 1)}·10³ mm³ (for M = ${f(T.Mtot / 1e6, 1)} kNm)</div>
-        <div>${f(T.tN, 3)} + ${f(T.tM, 3)} = <b>${f(I.util, 3)}</b></div>`;
+        ${T.tZ != null ? `<div>+ |N<sub>Ed</sub>·e<sub>N,y</sub>|/(W<sub>eff,z</sub>·f<sub>y</sub>/γ<sub>M0</sub>): e<sub>N,y</sub> = ${f(T.eNy, 1)} mm, ΔM<sub>z</sub> = N<sub>Ed</sub>·e<sub>N,y</sub> = ${f(Math.abs(T.dMz) / 1e6, 1)} kNm, W<sub>eff,z</sub> = ${f(T.Weffz / 1e3, 1)}·10³ mm³</div>
+        <div>${f(T.tN, 3)} + ${f(T.tM, 3)} + ${f(T.tZ, 3)} = <b>${f(I.util, 3)}</b></div>` : `<div>${f(T.tN, 3)} + ${f(T.tM, 3)} = <b>${f(I.util, 3)}</b></div>`}`;
     } else fl = `<div>${I.method}</div>`;
-    if (T.nc != null) fl += `<div>Desuden ren tryk (6.2.4), klasse 4: N<sub>Ed</sub>/N<sub>c,Rd</sub> = N<sub>Ed</sub>/(A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub>) = ${f(T.nc, 3)}${T.nc >= I.util - 1e-12 ? ' <b>(bestemmende)</b>' : ''}</div>`;
+    if (T.nc != null) fl += T.ncZ != null ? `<div>Desuden ren tryk, klasse 4 (6.2.9.3): N<sub>Ed</sub>/(A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub>) + |N<sub>Ed</sub>·e<sub>N,y</sub>|/(W<sub>eff,z</sub>·f<sub>y</sub>/γ<sub>M0</sub>) = ${f(T.nc - T.ncZ, 3)} + ${f(T.ncZ, 3)} = ${f(T.nc, 3)}${T.nc >= I.util - 1e-12 ? ' <b>(bestemmende)</b>' : ''}</div>` : `<div>Desuden ren tryk (6.2.4), klasse 4: N<sub>Ed</sub>/N<sub>c,Rd</sub> = N<sub>Ed</sub>/(A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub>) = ${f(T.nc, 3)}${T.nc >= I.util - 1e-12 ? ' <b>(bestemmende)</b>' : ''}</div>`;
     h += `<section class="card"><h2>Tværsnitsbæreevne</h2><p class="sub">EN 1993-1-1 6.2 med γ<sub>M0</sub> = ${f(gm.g, 3)}</p>
       <div class="tbl"><table><tbody>
         <tr><td>N<sub>pl,Rd</sub> = A·f<sub>y</sub>/γ<sub>M0</sub></td><td class="num">${f(res.R.Npl / 1e3, 1)} kN</td></tr>
@@ -1193,14 +1257,15 @@ function render() {
   h += `<section class="card"><h2>Forudsætninger</h2><p class="sub">Hvad programmet regner, og hvad det ikke dækker</p><ul class="notes">
     <li>f<sub>y</sub> = R<sub>eH</sub> fra produktstandarden (DK NA 3.2.1: valgmulighed a): EN 10025-2 for S235–S355 og S450, EN 10025-3/-4 for S420 og S460, med tykkelsestrin 16, 40, 63, 80 og 100 mm. Hulprofiler efter EN 10210/10219 har samme værdier. f<sub>y</sub> bestemmes ud fra profilets største godstykkelse.</li>
     <li>γ<sub>M0</sub> = 1,1·γ<sub>0</sub>·γ<sub>3</sub> efter DS/EN 1993-1-1 DK NA:2019, 6.1(1). γ<sub>0</sub> = 1,0 for lastkombination 1–2, K<sub>FI</sub> for 3–4 og 1,2·K<sub>FI</sub> for 5. Ved ulykke og seismik er γ<sub>M0</sub> = 1,0.</li>
-    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling for dobbeltsymmetriske tværsnit (valsede og symmetriske svejste I-profiler, RHS, CHS) med nullinjen bestemt af N<sub>Ed</sub> alene, så momentet tager resten af tværsnittet. For øvrige tværsnit (fx T-profiler og usymmetriske I-profiler) findes den ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele. Er tværsnittet klasse 4 ved ren tryk, men klasse 1–3 ved N + M, kontrolleres N<sub>Ed</sub> ≤ N<sub>c,Rd</sub> = A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub> også, så et lille moment aldrig giver lavere udnyttelse end ren tryk.</li>
+    <li>Klasse 1 og 2 bestemmes med α fra plastisk spændingsfordeling, klasse 3 med ψ fra elastisk spændingsfordeling i bruttotværsnittet. Ved N + M findes den plastiske fordeling for dobbeltsymmetriske tværsnit (valsede og symmetriske svejste I-profiler, RHS, CHS) og svejste C-profiler (symmetriske om bøjningsaksen) med nullinjen bestemt af N<sub>Ed</sub> alene, så momentet tager resten af tværsnittet. For øvrige tværsnit (fx T-profiler og usymmetriske I-profiler) findes den ved forholdsvis last: N<sub>Ed</sub> og M<sub>y,Ed</sub> skaleres med samme faktor op til den plastiske interaktionskurve, så fordelingen svarer til det faktiske forhold M/N. Tværsnittets klasse er den højeste klasse blandt de trykpåvirkede dele. Er tværsnittet klasse 4 ved ren tryk, men klasse 1–3 ved N + M, kontrolleres N<sub>Ed</sub> ≤ N<sub>c,Rd</sub> = A<sub>eff</sub>·f<sub>y</sub>/γ<sub>M0</sub> også, så et lille moment aldrig giver lavere udnyttelse end ren tryk.</li>
     <li>L-profiler: benene kontrolleres som udstående dele med c = ben − t − r<sub>1</sub>, og vinklen efter tabel 5.2 ark 3 (h/t ≤ 15ε og (b + h)/2t ≤ 11,5ε, ellers klasse 4). Ark 3 gælder ikke for vinkler i kontinuert kontakt med andre dele. Effektive bredder med b̄ = benlængden og k<sub>σ</sub> = 0,43. Kun normalkraft.</li>
     <li>Svejste T-profiler: kroppen er en udstående del (tabel 5.2 ark 2) med fri kant i underkant. Klasse 1–2 med 9ε/α og 10ε/α, når den frie kant er i tryk, ellers 9ε/(α√α) og 10ε/(α√α). Klasse 3 med 21ε√k<sub>σ</sub> (14ε ved ren tryk), og effektive bredder med k<sub>σ</sub> og ψ efter EN 1993-1-5 tabel 4.2.</li>
+    <li>Svejste C-profiler: flangerne er udstående dele med c = b − t<sub>w</sub> − √2·a, og kroppen er en indre del med c = h − 2t<sub>f</sub> − 2√2·a. Den ineffektive del af en flange ligger ved den frie kant. Ved klasse 4 og tryk flytter tyngdepunktet både lodret (e<sub>N</sub>) og vandret ind mod kroppen (e<sub>N,y</sub>). Tillægsmomentet ΔM<sub>z</sub> = N<sub>Ed</sub>·e<sub>N,y</sub> tages med i (6.44) med W<sub>eff,z</sub> fra det effektive tværsnit ved ren tryk. N<sub>Ed</sub> antages at virke i bruttotværsnittets tyngdepunkt. Vridning og forskydningscentrets placering er ikke medtaget, og W<sub>eff,y</sub> regnes uden hensyn til, at det effektive tværsnit ved bøjning ikke er symmetrisk.</li>
     <li>c-mål efter tabel 5.2. Valsede profiler: fradrag for rodradius r. Svejste profiler: fradrag √2·a for kantsvejs. RHS: c = h − 3t og b − 3t (konservativt).</li>
     <li>Kun dele i klasse 4 reduceres. A<sub>eff</sub> bestemmes ved ren tryk og W<sub>eff</sub> ved ren bøjning, jf. EN 1993-1-5, 4.3(3)–(4). ρ for indre dele bruger grænsen λ̄<sub>p</sub> ≤ 0,5 + √(0,085 − 0,055ψ).</li>
     <li>Flanger regnes med ψ fra bruttotværsnittet. Kroppens ψ bestemmes med effektiv trykflange og brutto krop, jf. EN 1993-1-5, 4.4(3).</li>
     <li>For dobbeltsymmetriske I-profiler og RHS i klasse 1–2 bruges (6.33)–(6.36) hhv. (6.39); for øvrige profiler en eksakt plastisk spændingsblok.</li>
-    <li>Ikke medtaget: forskydning (V<sub>Ed</sub>), shear lag, forskydningsbuling, bøjning om z-aksen, reduceret slankhed efter 4.4(4), samt søjle- og kipningsstabilitet. Klasse 4 rør henvises til EN 1993-1-6.</li>
+    <li>Ikke medtaget: forskydning (V<sub>Ed</sub>), shear lag, forskydningsbuling, påført bøjning om z-aksen (M<sub>z,Ed</sub>), reduceret slankhed efter 4.4(4), samt søjle- og kipningsstabilitet. Klasse 4 rør henvises til EN 1993-1-6.</li>
     <li>Profilmål for IPE, HEA, HEB og HEM samt listen over standard SHS, RHS og CHS er typiske standardværdier. Kontrollér mål og leveringsmulighed mod leverandørens tabel ved projektering. Andre serier kan regnes ved at rette målene.</li>
   </ul></section>`;
 
