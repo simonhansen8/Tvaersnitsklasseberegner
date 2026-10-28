@@ -1004,7 +1004,7 @@ function sideInfo(sec, fyT, fy, gm) {
 /* ---------- Tegning ---------- */
 function pathOf(pts, X, Y) { return 'M' + pts.map(p => X(p[0]).toFixed(2) + ',' + Y(p[1]).toFixed(2)).join('L') + 'Z'; }
 function svgSection(res, eff) {
-  const sec = res.sec, G = res.G, W = 640, H = 430, top = 46, bot = 40, secH = H - top - bot;
+  const sec = res.sec, G = res.G, isC = sec.type === 'channel', H0 = 430, W = 640, H = H0 + (isC ? 115 : 0), top = 46, bot = 40, secH = H0 - top - bot;
   const s = Math.min(250 / sec.bmax, secH / sec.h), cx = 200, z0 = top + (secH - sec.h * s) / 2;
   const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
   let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tværsnit ${sec.name}">
@@ -1053,7 +1053,7 @@ function svgSection(res, eff) {
   const sT = res.NEd / sA + sM * (zH - sZ) / sI, sB = res.NEd / sA + sM * (zL - sZ) / sI;
   const x0 = 480, mx = Math.max(Math.abs(sT), Math.abs(sB), 1e-9), sc = 90 / mx;
   const SX = sg => x0 + sg * sc;
-  out += `<text x="${x0}" y="${top - 26}" text-anchor="middle" style="fill:var(--muted);font:600 11px var(--f-body)">σ<tspan dy="3" font-size="8">x,Ed</tspan><tspan dy="-3"> ${isEff ? 'effektivt' : 'brutto'}, tryk +</tspan></text>`;
+  out += `<text x="${x0}" y="${top - 26}" text-anchor="middle" style="fill:var(--muted);font:600 11px var(--f-body)">σ<tspan dy="3" font-size="8">x,Ed</tspan><tspan dy="-3"> ${isEff ? 'effektivt' : 'brutto'}, tryk +${isC ? ', bøjning om y' : ''}</tspan></text>`;
   if (isEff && Math.abs(res.NEd * sE) > 1e-6) out += `<text x="${x0}" y="${top - 12}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">inkl. N<tspan dy="3" font-size="8">Ed</tspan><tspan dy="-3">·e</tspan><tspan dy="3" font-size="8">N</tspan><tspan dy="-3"> = ${f(-res.NEd * sE / 1e6, 1)} kNm</tspan></text>`;
   const poly = (a, b) => { // a,b: [z, σ]
     const col = (a[1] + b[1]) / 2 >= 0 ? 'var(--comp)' : 'var(--tens)';
@@ -1067,7 +1067,34 @@ function svgSection(res, eff) {
   const lab = (z, sg, dy) => `<text x="${sg >= 0 ? SX(sg) + 6 : SX(sg) - 6}" y="${Y(z) + dy}" text-anchor="${sg >= 0 ? 'start' : 'end'}" style="fill:var(--ink);font:11px var(--f-mono)">${f(sg, 0)}</text>`;
   out += lab(zH, sT, 4) + lab(zL, sB, 4);
   out += `<text x="${x0}" y="${Y(0) + 26}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
+  if (isC) out += svgChannelZ(res, X, Y(0) + 34, isEff);
   return out + '</svg>';
+}
+// C-profil: spænding hen over flangen fra N_Ed og ΔM_z = N_Ed·e_N,y (bøjning om z-aksen), tegnet under tværsnittet
+function svgChannelZ(res, X, y0, isEff) {
+  const sec = res.sec, G = res.G, E = isEff && res.NEd > 0 && res.effN && res.effN.eNy != null ? res.effN : null;
+  const A = E ? E.A : G.A, yc = E ? E.P.yc : G.yc, Iz = E ? E.P.Iz : G.Iz;
+  const yL = E ? E.yLo : -sec.bmax / 2, yR = E ? E.yHi : sec.bmax / 2;
+  const sig = y => res.NEd / A + (E ? res.NEd * (G.yc - yc) * (y - yc) / Iz : 0);
+  const sL = sig(yL), sR = sig(yR), base = y0 + 60, mx = Math.max(Math.abs(sL), Math.abs(sR), 1e-9), sc = 55 / mx;
+  const SY = sg => base + sg * sc; // tryk nedad
+  let o = `<text x="${X(0)}" y="${y0 + 8}" text-anchor="middle" style="fill:var(--muted);font:600 11px var(--f-body)">σ<tspan dy="3" font-size="8">x,Ed</tspan><tspan dy="-3"> hen over flangen, bøjning om z (${E ? 'effektivt' : 'brutto'}, tryk nedad)</tspan></text>`;
+  if (E) o += `<text x="${X(0)}" y="${y0 + 22}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">fra N<tspan dy="3" font-size="8">Ed</tspan><tspan dy="-3"> og ΔM</tspan><tspan dy="3" font-size="8">z</tspan><tspan dy="-3"> = N</tspan><tspan dy="3" font-size="8">Ed</tspan><tspan dy="-3">·e</tspan><tspan dy="3" font-size="8">N,y</tspan><tspan dy="-3"> = ${f(Math.abs(res.NEd * E.eNy) / 1e6, 1)} kNm</tspan></text>`;
+  const poly = (a, b) => { const col = (a[1] + b[1]) / 2 >= 0 ? 'var(--comp)' : 'var(--tens)';
+    return `<polygon points="${X(a[0])},${base} ${X(a[0])},${SY(a[1])} ${X(b[0])},${SY(b[1])} ${X(b[0])},${base}" style="fill:${col};fill-opacity:.18;stroke:${col};stroke-width:1.2"/>`; };
+  if (Math.abs(sL) > 1e-9 || Math.abs(sR) > 1e-9) {
+    if (sL * sR < 0) { const yy = yL - sL * (yR - yL) / (sR - sL); o += poly([yL, sL], [yy, 0]) + poly([yy, 0], [yR, sR]); }
+    else o += poly([yL, sL], [yR, sR]);
+  }
+  o += `<line x1="${X(-sec.bmax / 2) - 8}" y1="${base}" x2="${X(sec.bmax / 2) + 8}" y2="${base}" style="stroke:var(--ink);stroke-width:1"/>`;
+  o += `<line x1="${X(G.yc)}" y1="${base - 6}" x2="${X(G.yc)}" y2="${base + 6}" style="stroke:var(--ink);stroke-width:1.4"/>`;
+  if (E) o += `<line x1="${X(yc)}" y1="${base - 6}" x2="${X(yc)}" y2="${base + 6}" style="stroke:var(--k4);stroke-width:1.4"/>`;
+  const lab = (y, sg, anchor, dx) => `<text x="${X(y) + dx}" y="${SY(sg) + (sg >= 0 ? 13 : -5)}" text-anchor="${anchor}" style="fill:var(--ink);font:11px var(--f-mono)">${f(sg, 0)}</text>`;
+  o += lab(yL, sL, 'start', 3) + lab(yR, sR, 'end', -3);
+  o += `<text x="${X(sec.bmax / 2) + 12}" y="${base + 4}" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
+  const T = res.I.terms;
+  if (E && T && T.tZ != null) o += `<text x="${X(0)}" y="${base + 82}" text-anchor="middle" style="fill:var(--ink);font:11px var(--f-body)">Største samlede spænding (hjørne): N/A<tspan dy="3" font-size="8">eff</tspan><tspan dy="-3"> + |M</tspan><tspan dy="3" font-size="8">y</tspan><tspan dy="-3">|/W</tspan><tspan dy="3" font-size="8">eff,y</tspan><tspan dy="-3"> + |ΔM</tspan><tspan dy="3" font-size="8">z</tspan><tspan dy="-3">|/W</tspan><tspan dy="3" font-size="8">eff,z</tspan><tspan dy="-3"> = ${f(res.I.util * res.fyd, 0)} MPa</tspan></text>`;
+  return o;
 }
 
 /* ---------- Tabeller ---------- */
@@ -1315,7 +1342,8 @@ $('resetBtn').addEventListener('click', () => {
   location.reload();
 });
 $('frm').addEventListener('input', e => { if (!PRESET[e.target.id]) render(); });
-$('frm').addEventListener('change', e => { if (!PRESET[e.target.id]) render(); });
+// Tekstfelter er allerede regnet ved 'input'. Ellers tegnes siden om, når feltet mister fokus, og et klik på en knap går tabt
+$('frm').addEventListener('change', e => { if (!PRESET[e.target.id] && e.target.type !== 'text') render(); });
 $('frm').addEventListener('submit', e => e.preventDefault());
 render();
 })();
