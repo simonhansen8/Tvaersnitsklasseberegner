@@ -811,6 +811,12 @@ const Core = (() => {
   }
 
   /* ---------- Hovedberegning ---------- */
+  // Kun den kombinerede klasse (samme som cC i run/runAngle), uden effektive tværsnit og bæreevner. Bruges i serieoversigten
+  function combinedClass(sec, { fy, gM0, NEd, MEd }) {
+    const eps = Math.sqrt(235 / fy), fyd = fy / gM0;
+    const G = sectionProps(sec.shapes, sec.h, sec.bmax / 2);
+    return classify(sec, G, fyd, eps, NEd, sec.type === 'angle' ? 0 : MEd).cls;
+  }
   function run(sec, opts) {
     if (sec.type === 'angle') return runAngle(sec, opts);
     const { fy, gM0, NEd, MEd, iterate } = opts; // NEd [N], MEd [Nmm]
@@ -907,7 +913,7 @@ const Core = (() => {
     return { sec, fy, eps, gM0, fyd, G, NEd, MEd, cN, cM, cC, effN, effMp, effMn, effMz, R, I };
   }
 
-  return { doublySym, LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, fyRange, gammaM0, buildRolled, buildRolledDims, buildWelded, buildTee, buildChannel, buildRHS, buildCHS, rhsRadii, run, kSigmaInternal, kSigmaOutstand, internalWidths, outstandWidths };
+  return { doublySym, LIB, HOLLOW, ANGLES, buildAngle, catalog, GRADES, fyTable, fyRange, gammaM0, buildRolled, buildRolledDims, buildWelded, buildTee, buildChannel, buildRHS, buildCHS, rhsRadii, run, combinedClass, kSigmaInternal, kSigmaOutstand, internalWidths, outstandWidths };
 })();
 if (typeof module !== 'undefined') module.exports = Core;
 </script>
@@ -1381,14 +1387,14 @@ function render() {
     <p class="hint" style="margin-top:8px">${defs}</p></section>`;
 
   // Serieoversigt for standardprofiler
-  const ovr = overview(gm);
+  const ovr = overview(gm, NEd, MEd);
   if (ovr) {
-    const n4 = ovr.rows.filter(r => r.cN === 4).length, m4 = ovr.rows.filter(r => r.cM === 4).length, n3 = ovr.rows.filter(r => r.cN === 3 || r.cM === 3).length;
+    const n4 = ovr.rows.filter(r => r.cN === 4).length, c4 = ovr.rows.filter(r => r.cC === 4).length, m4 = ovr.rows.filter(r => r.cM === 4).length, n3 = ovr.rows.filter(r => r.cN === 3 || r.cM === 3).length;
     h += `<section class="card"><h2>Serieoversigt · ${ovr.fam}${ovr.mfg ? (ovr.mfg === 'hot' ? ' varmformet' : ' koldformet') : ''} · ${$('fyMan').checked ? 'f<sub>y</sub> ' + f(num('fyVal'), 0) : $('grade').value}</h2>
-      <p class="sub">${ovr.rows.length} standardstørrelser. ${isL ? `${n4} er i klasse 4 ved ren tryk${n4 ? `, heraf ${ovr.rows.filter(r => r.cN === 4 && r.aRatio < 1).length} med A<sub>eff</sub> < A` : ''}.` : `${n4} er i klasse 4 ved ren tryk og ${m4} ved ren bøjning; ${n3} har klasse 3 i mindst ét tilfælde.`} Vælg en række for at regne profilet.</p>
-      <div class="tbl ovwrap"><table><thead><tr><th>Profil</th><th>f<sub>y</sub></th><th>maks c/t</th><th>Ren tryk</th><th>A<sub>eff</sub>/A</th><th>N<sub>c,Rd</sub> [kN]</th><th>Ren bøjning</th><th>W<sub>eff</sub>/W<sub>el</sub></th><th>M<sub>c,y,Rd</sub> [kNm]</th></tr></thead><tbody>
-      ${ovr.rows.map(r => r.na ? `<tr class="pick" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"><td>${r.p.key}</td><td colspan="8" class="na">Godstykkelse over 100 mm</td></tr>` :
-        `<tr class="pick${r.p.key === ovr.cur ? ' cur' : ''}" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"${r.p.key === ovr.cur ? ' aria-current="true"' : ''}><td>${r.p.key}</td><td class="num">${f(r.fy, 0)}</td><td class="num">${f(r.maxct, 1)}</td><td>${clsPill(r.cN)}</td><td class="num">${r.aRatio == null ? '–' : f(r.aRatio, 3)}</td><td class="num">${r.Nc == null ? '–' : f(r.Nc / 1e3, 0)}</td><td>${clsPill(r.cM)}</td><td class="num">${r.wRatio == null ? '–' : f(r.wRatio, 3)}</td><td class="num">${r.Mc == null ? '–' : f(r.Mc / 1e6, 1)}</td></tr>`).join('')}
+      <p class="sub">${ovr.rows.length} standardstørrelser. ${isL ? `${n4} er i klasse 4 ved ren tryk${n4 ? `, heraf ${ovr.rows.filter(r => r.cN === 4 && r.aRatio < 1).length} med A<sub>eff</sub> < A` : ''}.` : `${n4} er i klasse 4 ved ren tryk og ${m4} ved ren bøjning; ${n3} har klasse 3 i mindst ét tilfælde.`} ${isL ? `Kolonnen „Aktuel N<sub>Ed</sub>“ er klassen ved N<sub>Ed</sub> = ${f(NEd, 1)} kN; ${c4} er i klasse 4.` : `Kolonnen „Kombineret“ er klassen ved N<sub>Ed</sub> = ${f(NEd, 1)} kN og M<sub>y,Ed</sub> = ${f(MEd, 1)} kNm; ${c4} er i klasse 4.`} Vælg en række for at regne profilet.</p>
+      <div class="tbl ovwrap"><table><thead><tr><th>Profil</th><th>f<sub>y</sub></th><th>maks c/t</th><th>Ren tryk</th><th>A<sub>eff</sub>/A</th><th>N<sub>c,Rd</sub> [kN]</th><th>Ren bøjning</th><th>W<sub>eff</sub>/W<sub>el</sub></th><th>M<sub>c,y,Rd</sub> [kNm]</th><th>${isL ? 'Aktuel N<sub>Ed</sub>' : 'Kombineret'}</th></tr></thead><tbody>
+      ${ovr.rows.map(r => r.na ? `<tr class="pick" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"><td>${r.p.key}</td><td colspan="9" class="na">Godstykkelse over 100 mm</td></tr>` :
+        `<tr class="pick${r.p.key === ovr.cur ? ' cur' : ''}" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"${r.p.key === ovr.cur ? ' aria-current="true"' : ''}><td>${r.p.key}</td><td class="num">${f(r.fy, 0)}</td><td class="num">${f(r.maxct, 1)}</td><td>${clsPill(r.cN)}</td><td class="num">${r.aRatio == null ? '–' : f(r.aRatio, 3)}</td><td class="num">${r.Nc == null ? '–' : f(r.Nc / 1e3, 0)}</td><td>${clsPill(r.cM)}</td><td class="num">${r.wRatio == null ? '–' : f(r.wRatio, 3)}</td><td class="num">${r.Mc == null ? '–' : f(r.Mc / 1e6, 1)}</td><td>${clsPill(r.cC)}</td></tr>`).join('')}
       </tbody></table></div>
       <p class="hint" style="margin-top:8px">A<sub>eff</sub>/A og W<sub>eff</sub>/W<sub>el</sub> = 1 betyder fuldt effektivt. Bæreevner med γ<sub>M0</sub> = ${f(gm.g, 3)}${ovr.fam === 'CHS' ? '; klasse 4 rør kræver EN 1993-1-6' : ''}. Standardstørrelserne er typiske; kontrollér, at profilet kan leveres.</p></section>`;
   }
@@ -1515,7 +1521,8 @@ function render() {
 }
 
 const ovCache = {};
-function overview(gm) {
+let ovComb = { key: null, rows: null };
+function overview(gm, NEd, MEd) {
   const t = typ(); let id, list, fam;
   if (t === 'rolled') { const m = matchPreset('rprof'); if (!m) return null; fam = m.group; list = CAT.rolled.filter(p => p.group === fam); id = 'rprof'; }
   else if (t === 'rhs') { fam = num('r_h') === num('r_b') ? 'SHS' : 'RHS'; list = CAT[fam]; id = 'hprof'; }
@@ -1529,10 +1536,13 @@ function overview(gm) {
     const fy = fyMan > 0 ? fyMan : Core.fyTable(grade, s.tmax);
     if (!fy) return { p, na: true };
     const r = Core.run(s, { fy, gM0: gm.g, NEd: 0, MEd: 0 });
-    return { p, fy, cN: r.cN.cls, cM: r.cM ? r.cM.cls : null, maxct: Math.max(...s.elements.map(e => e.c / e.t)),
+    return { p, s, fy, cN: r.cN.cls, cM: r.cM ? r.cM.cls : null, maxct: Math.max(...s.elements.map(e => e.c / e.t)),
       aRatio: r.effN ? r.effN.A / r.G.A : (r.cN.cls < 4 ? 1 : null), wRatio: !r.cM ? null : r.effMp ? r.effMp.Wmin / r.G.Welmin : (r.cM.cls < 4 ? 1 : null), Nc: r.R.NcRd, Mc: r.R.McRd };
   });
-  return { fam, id, mfg, rows: ovCache[key], cur: $(id).value };
+  // Kombineret klasse (samme beregning som feltet "Kombineret") afhænger af lasten og regnes for sig
+  const ckey = key + '|' + NEd + '|' + MEd;
+  if (ovComb.key !== ckey) ovComb = { key: ckey, rows: ovCache[key].map(r => r.na ? r : { ...r, cC: Core.combinedClass(r.s, { fy: r.fy, gM0: gm.g, NEd: NEd * 1e3, MEd: MEd * 1e6 }) }) };
+  return { fam, id, mfg, rows: ovComb.rows, cur: $(id).value };
 }
 
 ['rprof', 'hprof', 'cprof', 'lprof'].forEach(id => {
