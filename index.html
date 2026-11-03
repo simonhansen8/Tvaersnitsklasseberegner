@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="da"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Tværsnitsklasseberegner</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -872,7 +872,9 @@ const Core = (() => {
     else if (k <= 2) {
       const n = Math.abs(NEd) / Npl, Mpl = G.Wpl * fyd, d = sec.dims;
       const dsym = sec.type === 'rolled' || (sec.type === 'welded' && d.bt === d.bb && d.tft === d.tfb);
-      if (n >= 1) { I.method = 'Normalkraft overskrider N<sub>pl,Rd</sub>'; I.util = n; I.terms = { n }; }
+      if (n >= 1) { // intet tværsnit kan bære et moment oveni N_pl,Rd: udnyttelsen går mod uendelig (som for n → 1 nedefra)
+        I.method = 'Normalkraft overskrider N<sub>pl,Rd</sub>'; I.util = MEd === 0 ? n : Infinity; I.terms = { n };
+      }
       else if (dsym) {
         const b = sec.type === 'rolled' ? d.b : d.bt, tf = sec.type === 'rolled' ? d.tf : d.tft, tw = d.tw;
         const hw = sec.h - 2 * tf, a = Math.min((G.A - 2 * b * tf) / G.A, 0.5);
@@ -921,7 +923,14 @@ if (typeof module !== 'undefined') module.exports = Core;
 
 (() => {
 const $ = id => document.getElementById(id);
-const num = id => parseFloat(String($(id).value).replace(/\s/g, '').replace(',', '.'));
+// Streng tolkning af tal: dansk skrivemåde (1.234,5), punktum som decimal (1.5) eller e-notation.
+// Tekst som "12abc" og tvetydige tal som "1.500" giver NaN i stedet for at blive gættet.
+const num = id => {
+  let s = String($(id).value).replace(/\s/g, '');
+  if (s.includes(',')) { if (!/^[+-]?(\d{1,3}(\.\d{3})+|\d+),\d+$/.test(s)) return NaN; s = s.replace(/\./g, '').replace(',', '.'); }
+  else if (/^[+-]?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) return NaN;
+  return /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s) ? Number(s) : NaN;
+};
 const f = (x, d = 1) => (x == null || !isFinite(x)) ? '–' : x.toLocaleString('da-DK', { minimumFractionDigits: d, maximumFractionDigits: d });
 const typ = () => document.querySelector('input[name=typ]:checked').value;
 const radio = n => document.querySelector(`input[name=${n}]:checked`).value;
@@ -1025,6 +1034,7 @@ function buildSection() {
     need(p.h > 0 && p.b > 0 && p.t > 0, 'h, b og t skal være positive tal.');
     need(p.b > 3 * p.t && p.h > 3 * p.t, 'Både h og b skal være større end 3t.');
     const [ro, ri] = Core.rhsRadii(p.t, p.mfg);
+    need(2 * ro <= Math.min(p.h, p.b), `Hjørneradius r<sub>o</sub> = ${f(ro, 1)} mm er større end halvdelen af den korteste side. Profilet kan ikke fremstilles med de mål.`);
     $('rhsR').innerHTML = `Hjørneradier: r<sub>o</sub> = ${f(ro, 1)} mm, r<sub>i</sub> = ${f(ri, 1)} mm (${p.mfg === 'hot' ? 'EN 10210-2' : 'EN 10219-2'}). c = h − 3t og b − 3t.`;
     const m = matchPreset('hprof');
     return Core.buildRHS({ ...p, name: m ? m.key : null });
@@ -1341,9 +1351,11 @@ function render() {
   const fy = $('fyMan').checked ? num('fyVal') : fyT;
   const gm = Core.gammaM0({ situation: radio('sit'), lk: +$('lk').value, cc: $('cc').value, control: $('ctrl').value });
   sideInfo(sec, fyT, fy, gm);
+  if ($('fyMan').checked && !(fy >= 100 && fy <= 1500)) { out.innerHTML = `<div class="err"><b>Ugyldig f<sub>y</sub>:</b> indtast et tal mellem 100 og 1500 MPa.</div>`; return; }
+  if (sec.h > 5000 || sec.bmax > 5000 || sec.tmax > 500) { out.innerHTML = `<div class="err"><b>Kan ikke beregne:</b> målene er urealistisk store (over 5000 mm, eller godstykkelse over 500 mm). Kontrollér enheden (mm).</div>`; return; }
   if (!(fy > 0)) { out.innerHTML = `<div class="err"><b>Mangler f<sub>y</sub>:</b> godstykkelsen ${f(sec.tmax, 1)} mm er over 100 mm, som programmets tabel dækker. Slå "Angiv f<sub>y</sub> manuelt" til og indtast værdien fra produktstandarden.</div>`; return; }
   const isL = sec.type === 'angle', NEd = num('NEd'), MEd = isL ? 0 : num('MEd');
-  if (!isFinite(NEd) || !isFinite(MEd)) { out.innerHTML = `<div class="err"><b>Kan ikke beregne:</b> N<sub>Ed</sub> og M<sub>y,Ed</sub> skal være tal (brug 0 for ingen last).</div>`; return; }
+  if (!isFinite(NEd) || !isFinite(MEd) || Math.abs(NEd) > 1e7 || Math.abs(MEd) > 1e7) { out.innerHTML = `<div class="err"><b>Kan ikke beregne:</b> N<sub>Ed</sub> og M<sub>y,Ed</sub> skal være tal mellem −10 000 000 og 10 000 000 (brug 0 for ingen last). Skriv fx 1500,5 eller 1.500,5 – ikke tekst eller enheder.</div>`; return; }
   const res = Core.run(sec, { fy, gM0: gm.g, NEd: NEd * 1e3, MEd: MEd * 1e6, iterate: $('iter').checked });
   const G = res.G, k = res.cC.cls, mNeg = MEd < 0, effM = mNeg ? res.effMn : res.effMp;
   if (view === 'N' && !res.effN) view = 'G';
@@ -1362,7 +1374,7 @@ function render() {
         <button type="button" class="case b${k}${proof === 'C' ? ' on' : ''}" data-p="C"><span class="t">${isL ? (NEd < 0 ? 'Træk' : 'N<sub>Ed</sub>') : 'Kombineret'}</span><span class="v c${k}">Klasse ${k}</span><span class="more">Se eftervisning ›</span></button>
       </div>
       <div class="kv"><span><b>f<sub>y</sub></b> ${f(fy, 0)} MPa</span><span><b>ε</b> ${f(res.eps, 4)}</span><span><b>γ<sub>M0</sub></b> ${f(gm.g, 3)}</span><span><b>f<sub>y</sub>/γ<sub>M0</sub></b> ${f(res.fyd, 1)} MPa</span></div>
-      <div class="util"><div class="txt"><span>Udnyttelse af tværsnit · ${res.I.method}</span><strong class="${uc.replace('k', 'c')}">${U == null ? 'ikke beregnet' : f(U * 100, 1) + ' %'}</strong></div>
+      <div class="util"><div class="txt"><span>Udnyttelse af tværsnit · ${res.I.method}</span><strong class="${uc.replace('k', 'c')}">${U == null ? 'ikke beregnet' : U === Infinity ? 'over 100 %' : f(U * 100, 1) + ' %'}</strong></div>
       <div class="bar"><i style="width:${U == null ? 0 : Math.min(U, 1) * 100}%;background:var(--${uc})"></i></div></div>
     </div></div></section>`;
 
@@ -1497,6 +1509,7 @@ function render() {
     <li>c-mål efter tabel 5.2. Valsede profiler: fradrag for rodradius r. Svejste profiler: fradrag √2·a for kantsvejs. RHS: c = h − 3t og b − 3t (konservativt).</li>
     <li>Kun dele i klasse 4 reduceres. A<sub>eff</sub> bestemmes ved ren tryk og W<sub>eff</sub> ved ren bøjning, jf. EN 1993-1-5, 4.3(3)–(4). ρ for indre dele bruger grænsen λ̄<sub>p</sub> ≤ 0,5 + √(0,085 − 0,055ψ).</li>
     <li>Flanger regnes med ψ fra bruttotværsnittet. Kroppens ψ bestemmes med effektiv trykflange og brutto krop, jf. EN 1993-1-5, 4.4(3).</li>
+    <li>Hvis N og M øges i samme forhold, kan klassen gå fra 3 til 2. Så skifter beregningen fra elastisk (6.2.9.2) til plastisk (6.2.9.1), og udnyttelsen kan falde. Det følger Eurocode. Dobbeltsymmetriske profiler bruger N alene til α, de øvrige forholdsvis last.</li>
     <li>For dobbeltsymmetriske I-profiler og RHS i klasse 1–2 bruges (6.33)–(6.36) hhv. (6.39); for øvrige profiler en eksakt plastisk spændingsblok.</li>
     <li>Ikke medtaget: forskydning (V<sub>Ed</sub>), shear lag, forskydningsbuling, påført bøjning om z-aksen (M<sub>z,Ed</sub>), reduceret slankhed efter 4.4(4), samt søjle- og kipningsstabilitet. Klasse 4 rør henvises til EN 1993-1-6.</li>
     <li>Profilmål for IPE, HEA, HEB og HEM samt listen over standard SHS, RHS og CHS er typiske standardværdier. Kontrollér mål og leveringsmulighed mod leverandørens tabel ved projektering. Andre serier kan regnes ved at rette målene.</li>
