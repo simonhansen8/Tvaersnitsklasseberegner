@@ -34,6 +34,15 @@ body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:1
 .wrap{max-width:1360px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
 header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px;padding-bottom:16px;border-bottom:2px solid var(--ink);margin-bottom:20px}
 h1{font-family:var(--f-display);font-stretch:78%;font-weight:800;font-size:clamp(28px,4vw,40px);line-height:1;margin:0;letter-spacing:-.01em;text-wrap:balance}
+.ver{display:flex;flex-wrap:nowrap;align-items:center;gap:4px 10px;flex-basis:100%;font-size:12.5px;line-height:1.4;padding:6px 10px;border-radius:5px;border:1px solid var(--line);background:var(--surface);color:var(--muted)}
+.ver b{font-weight:600}
+.ver>span:not(.dot){flex:1 1 280px;min-width:0}
+.ver .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);flex:none}
+.ver.ok{border-color:var(--k1);background:var(--k1-bg);color:var(--ink)}.ver.ok .dot{background:var(--k1)}
+.ver.old{border-color:var(--k4);background:var(--k4-bg);color:var(--ink)}.ver.old .dot{background:var(--k4)}
+.ver.warn{border-color:var(--k3);background:var(--k3-bg);color:var(--ink)}.ver.warn .dot{background:var(--k3)}
+.ver button,.ver a.btn{font:inherit;font-size:12px;padding:2px 9px;border-radius:4px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer;text-decoration:none}
+.ver button:focus-visible,.ver a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .refs{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 14px}
 .layout{display:grid;grid-template-columns:330px minmax(0,1fr);gap:20px;align-items:start}
 @media (max-width:900px){.layout{grid-template-columns:minmax(0,1fr)}}
@@ -164,6 +173,7 @@ button.thumb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <header class="top">
   <h1>Tværsnitsklasseberegner</h1>
   <div class="refs"><span>EN 1993-1-1 tabel 5.2</span><span>EN 1993-1-5 afsnit 4.4</span><span>DS/EN 1993-1-1 DK NA:2019</span></div>
+  <div class="ver" id="ver" role="status" aria-live="polite"><span class="dot"></span><span>Tjekker om du har den nyeste version …</span></div>
 </header>
 
 <div class="layout">
@@ -305,6 +315,7 @@ button.thumb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <main id="out" aria-live="polite"></main>
 </div>
 </div>
+<script id="ver-snap">/* Versionstjek: øjebliksbillede af sidens opmærkning, før noget script ændrer den */ window.__verSnap = document.body.innerHTML;</script>
 <script>
 /* ===== Beregningskerne: EN 1993-1-1 tabel 5.2 + EN 1993-1-5 afsnit 4.4 + DK NA =====
    Enheder internt: mm, N, Nmm, MPa. Fortegn: N > 0 er tryk, M > 0 giver tryk i oversiden. */
@@ -1563,6 +1574,95 @@ $('frm').addEventListener('input', e => { if (!PRESET[e.target.id]) render(); })
 $('frm').addEventListener('change', e => { if (!PRESET[e.target.id] && e.target.type !== 'text') render(); });
 $('frm').addEventListener('submit', e => e.preventDefault());
 render();
+})();
+</script>
+<script>
+/* ===== Versionstjek =====
+   Sammenligner denne fil med den nyeste index.html på main i GitHub-repoet.
+   Intet versionsnummer skal opdateres i hånden: "fingeraftrykket" er sidens egen opmærkning
+   og script-kode, og det sammenlignes med de seneste udgaver af filen på GitHub. */
+(() => {
+  const REPO = 'simonhansen8/Tvaersnitsklasseberegner';
+  const PAGES = 'https://simonhansen8.github.io/Tvaersnitsklasseberegner/';
+  const API = `https://api.github.com/repos/${REPO}/commits?sha=main&path=index.html&per_page=10`;
+  const RAW = sha => `https://raw.githubusercontent.com/${REPO}/${sha}/index.html`;
+  const box = document.getElementById('ver');
+  if (!box) return;
+  const local = location.protocol === 'file:';
+
+  // Fingeraftryk: opmærkningen før ver-snap + teksten i alle inline-scripts efter den
+  const fingerprint = (doc, bodyHtml) => {
+    const i = bodyHtml.indexOf('<script id="ver-snap"');
+    if (i < 0) return null;
+    let fp = bodyHtml.slice(0, i), on = false;
+    for (const sc of doc.body.querySelectorAll('script')) {
+      if (sc.id === 'ver-snap') { on = true; continue; }
+      if (on && !sc.src) fp += '\n<script>' + sc.textContent;
+    }
+    return fp;
+  };
+  const mine = fingerprint(document, window.__verSnap || '');
+
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const describe = c => {
+    const msg = (c.commit.message || '').split('\n')[0];
+    const m = msg.match(/\(#(\d+)\)\s*$/);
+    const title = msg.replace(/\s*\(#\d+\)\s*$/, '');
+    const d = new Date(c.commit.committer.date);
+    const when = d.toLocaleDateString('da-DK', { day: 'numeric', month: 'short', year: 'numeric' }) + ' kl. ' +
+      d.toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' });
+    return { pr: m ? '#' + m[1] : c.sha.slice(0, 7), title, when };
+  };
+  const show = (cls, html) => { box.className = 'ver' + (cls ? ' ' + cls : ''); box.innerHTML = '<span class="dot"></span>' + html; };
+  const reloadBtn = local
+    ? `<a class="btn" href="${PAGES}" target="_blank" rel="noopener">Åbn nyeste version online</a>`
+    : '<button type="button" data-act="reload">Genindlæs</button>';
+
+  let busy = false, last = 0;
+  async function check() {
+    if (busy) return;
+    busy = true; last = Date.now();
+    try {
+      if (!mine) throw new Error('fp');
+      const r = await fetch(API, { cache: 'no-store' });
+      if (!r.ok) throw new Error('api ' + r.status);
+      const commits = await r.json();
+      if (!commits.length) throw new Error('tom');
+      const newest = describe(commits[0]);
+      let match = -1;
+      for (let k = 0; k < commits.length; k++) {
+        const t = await fetch(RAW(commits[k].sha));
+        if (!t.ok) throw new Error('raw ' + t.status);
+        const doc = new DOMParser().parseFromString(await t.text(), 'text/html');
+        if (fingerprint(doc, doc.body.innerHTML) === mine) { match = k; break; }
+        if (k === 0 && !doc.getElementById('ver-snap')) break; // ældre udgaver har intet versionstjek
+      }
+      const info = `<b>${esc(newest.pr)}</b> ${esc(newest.title)} <span>(${esc(newest.when)})</span>`;
+      if (match === 0) {
+        show('ok', `<span><b>Ajour</b> – du har den nyeste version. Seneste ændring: ${info}</span>`);
+      } else if (match > 0) {
+        const mineInfo = describe(commits[match]);
+        show('old', `<span><b>Ikke ajour</b> – der findes en nyere version: ${info}. Du har versionen fra ${esc(mineInfo.pr)} (${esc(mineInfo.when)}).` +
+          (local ? '' : ' Er ændringen lige blevet lagt ud, kan der gå et par minutter, før den kan hentes.') + `</span>${reloadBtn}`);
+      } else {
+        show('old', `<span><b>Ikke ajour</b> – denne udgave svarer ikke til den nyeste på GitHub. Nyeste: ${info}.` +
+          (local ? '' : ' Er ændringen lige blevet lagt ud, kan der gå et par minutter, før den kan hentes.') + `</span>${reloadBtn}`);
+      }
+    } catch (e) {
+      const why = !navigator.onLine ? 'ingen internetforbindelse' : 'GitHub kunne ikke nås lige nu';
+      show('warn', `<span><b>Versionen kunne ikke tjekkes</b> (${why}). Beregningerne virker som normalt.</span><button type="button" data-act="retry">Prøv igen</button>`);
+    } finally { busy = false; }
+  }
+
+  box.addEventListener('click', e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'reload') location.reload();
+    if (act === 'retry') check();
+  });
+  // Tjek igen, når man vender tilbage til fanen (højst hvert 10. minut), og når nettet kommer tilbage
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && Date.now() - last > 600000) check(); });
+  window.addEventListener('online', check);
+  check();
 })();
 </script>
 
