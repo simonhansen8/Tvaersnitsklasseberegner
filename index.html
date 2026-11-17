@@ -1,4 +1,4 @@
-<!doctype html><html lang="da"><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style>
 <title>Tværsnitsklasseberegner</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -167,7 +167,42 @@ button.thumb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .proof .muted{color:var(--muted);font-weight:400}
 .proof .cmp{margin-top:4px;padding-top:4px;border-top:1px dashed var(--line)}
 @media (prefers-reduced-motion:no-preference){.util .bar i{transition:width .25s ease}}
+.printonly{display:none}
+.inlist{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:3px 16px;margin:0;font-size:12.5px}
+.inlist dt{color:var(--muted)}
+.inlist dd{margin:0;font-family:var(--f-mono)}
+/* Udskrift / PDF: lyse farver, inputpanelet erstattes af "Inddata", intet afskåret i rulle-bokse */
+@media print{
+  @page{size:A4;margin:12mm}
+  :root:not(#print){ /* højere specificitet end mørkt tema, så udskriften altid er lys */
+    --bg:#FFFFFF; --surface:#FFFFFF; --sunk:#EEF1F4; --ink:#14202B; --muted:#56636F; --line:#CDD5DD;
+    --accent:#1C4F78; --accent-ink:#FFFFFF; --steel:#A9B6C2; --steel-edge:#3D4A56;
+    --k1:#2C7A4B; --k2:#3C7D8F; --k3:#A86A12; --k4:#B3261E;
+    --k1-bg:#E1F0E6; --k2-bg:#DDEDF1; --k3-bg:#F6EAD6; --k4-bg:#F8DFDC;
+    --comp:#B3261E; --tens:#1C4F78; color-scheme:light}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#fff;font-size:12px}
+  .wrap{max-width:none;padding:0}
+  header.top{margin-bottom:10px;padding-bottom:8px}
+  .ver,aside.inputs,.views,.case .more,.noprint{display:none!important}
+  .printonly{display:block}
+  .layout{display:block}
+  main{gap:10px}
+  section.card{padding:10px 12px;border-color:#B8C2CC}
+  h2,h3,h4{break-after:avoid}
+  .summary,.thumbs,.svgbox,.proof .part,.proof .step .formula,tr,.inlist{break-inside:avoid}
+  .badge{width:110px;height:110px}.badge .num{font-size:72px}
+  button.case,button.badge{box-shadow:none!important}
+  .tbl,.svgbox,.formula,.ovwrap{overflow:visible;max-height:none}
+  .formula div{white-space:normal}
+  th,td{padding:3px 5px;white-space:normal}
+  table{font-size:11px}
+  .grid2{grid-template-columns:minmax(0,1fr)}
+  .svgbox svg{max-width:520px}
+}
 </style>
+</head>
+<body>
 
 <div class="wrap">
 <header class="top">
@@ -310,12 +345,13 @@ button.thumb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   </fieldset>
   </form>
   <div class="reset"><p class="hint">Dine indtastninger gemmes automatisk i browseren.</p><button type="button" id="resetBtn">Nulstil til standard</button></div>
+  <div class="reset"><p class="hint">Udskriften får inddata og eftervisningen med.</p><button type="button" id="printBtn">Udskriv / gem som PDF</button></div>
 </aside>
 
 <main id="out" aria-live="polite"></main>
 </div>
 </div>
-<script id="ver-snap">/* Versionstjek: øjebliksbillede af sidens opmærkning, før noget script ændrer den */ window.__verSnap = document.body.innerHTML;</script>
+<script id="ver-snap">/* Versionstjek: øjebliksbillede af sidens opmærkning (head + body), før noget script ændrer den */ window.__verSnap = document.documentElement.innerHTML;</script>
 <script>
 /* ===== Beregningskerne: EN 1993-1-1 tabel 5.2 + EN 1993-1-5 afsnit 4.4 + DK NA =====
    Enheder internt: mm, N, Nmm, MPa. Fortegn: N > 0 er tryk, M > 0 giver tryk i oversiden. */
@@ -936,8 +972,9 @@ if (typeof module !== 'undefined') module.exports = Core;
 const $ = id => document.getElementById(id);
 // Streng tolkning af tal: dansk skrivemåde (1.234,5), punktum som decimal (1.5) eller e-notation.
 // Tekst som "12abc" og tvetydige tal som "1.500" giver NaN i stedet for at blive gættet.
+// Typografisk minus (−) og tankestreg (–), fx kopieret fra Word, læses som almindeligt minus.
 const num = id => {
-  let s = String($(id).value).replace(/\s/g, '');
+  let s = String($(id).value).replace(/\s/g, '').replace(/[\u2212\u2013]/g, '-');
   if (s.includes(',')) { if (!/^[+-]?(\d{1,3}(\.\d{3})+|\d+),\d+$/.test(s)) return NaN; s = s.replace(/\./g, '').replace(',', '.'); }
   else if (/^[+-]?[1-9]\d{0,2}(\.\d{3})+$/.test(s)) return NaN;
   return /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s) ? Number(s) : NaN;
@@ -1347,6 +1384,28 @@ function widthRows(eff, title, eps) {
   return h;
 }
 
+/* ---------- Inddata (vises kun på udskrift, hvor inputpanelet er skjult) ---------- */
+function inputsHTML(sec, fyT, fy, gm, NEd, MEd) {
+  const fv = x => isFinite(x) ? x.toLocaleString('da-DK', { maximumFractionDigits: 3 }) : '–';
+  const dims = [...$('g-' + typ()).querySelectorAll('label.f')].filter(l => l.querySelector('input')).map(l => {
+    const c = l.cloneNode(true), u = c.querySelector('.u')?.textContent || '';
+    c.querySelectorAll('input, select, .u').forEach(x => x.remove());
+    return `${c.innerHTML.trim()} = ${fv(num(l.querySelector('input').id))} ${u}`;
+  });
+  if (sec.type === 'rhs') dims.push(`${radio('mfg') === 'hot' ? 'Varmformet (EN 10210)' : 'Koldformet (EN 10219)'}, r<sub>o</sub> = ${fv(sec.dims.ro)} mm, r<sub>i</sub> = ${fv(sec.dims.ri)} mm`);
+  const optTxt = id => $(id).selectedOptions[0]?.textContent || '';
+  const row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
+  const ver = ($('ver').textContent || '').replace(/\s*(Genindlæs|Prøv igen|Åbn nyeste version online)\s*$/, '').replace(/\s*Er ændringen lige blevet lagt ud.*$/, '').trim();
+  return `<section class="card printonly"><h2>Inddata</h2><p class="sub">Udskrevet ${new Date().toLocaleString('da-DK', { dateStyle: 'long', timeStyle: 'short' })}</p><dl class="inlist">
+    ${row('Profil', sec.name)}${row('Mål', dims.join(' · '))}
+    ${row('Materiale', $('fyMan').checked ? `f<sub>y</sub> = ${fv(fy)} MPa (angivet manuelt)` : `${$('grade').value}, f<sub>y</sub> = ${fv(fyT)} MPa (${Core.fyRange(sec.tmax)})`)}
+    ${row('Snitkræfter', `N<sub>Ed</sub> = ${fv(NEd)} kN (tryk +)${sec.type === 'angle' ? '' : `, M<sub>y,Ed</sub> = ${fv(MEd)} kNm (+ = tryk i overside)`}`)}
+    ${row('Partialkoefficient', gm.g0 == null ? 'Ulykke / seismisk: γ<sub>M0</sub> = 1,00' : `Vedvarende / midlertidig, lastkombination ${$('lk').value}, ${optTxt('cc')}, kontrolklasse ${optTxt('ctrl').toLowerCase()}: γ<sub>M0</sub> = ${f(gm.g, 3)}`)}
+    ${row('Effektivt tværsnit', $('iter').checked ? 'ψ for kroppen itereret med det effektive tværsnits nullinje' : 'ψ for kroppen med effektiv trykflange og brutto krop (EN 1993-1-5, 4.4(3))')}
+    ${ver ? row('Programversion', ver) : ''}
+  </dl></section>`;
+}
+
 /* ---------- Render ---------- */
 function render() {
   const out = $('out');
@@ -1389,6 +1448,8 @@ function render() {
       <div class="bar"><i style="width:${U == null ? 0 : Math.min(U, 1) * 100}%;background:var(--${uc})"></i></div></div>
     </div></div></section>`;
 
+  h = inputsHTML(sec, fyT, fy, gm, NEd, MEd) + h;
+
   // Eftervisning
   if (proof === 'M' && isL) proof = null;
   if (proof) h += proofHTML(res, proof);
@@ -1413,7 +1474,7 @@ function render() {
   const ovr = overview(gm, NEd, MEd);
   if (ovr) {
     const n4 = ovr.rows.filter(r => r.cN === 4).length, c4 = ovr.rows.filter(r => r.cC === 4).length, m4 = ovr.rows.filter(r => r.cM === 4).length, n3 = ovr.rows.filter(r => r.cN === 3 || r.cM === 3).length;
-    h += `<section class="card"><h2>Serieoversigt · ${ovr.fam}${ovr.mfg ? (ovr.mfg === 'hot' ? ' varmformet' : ' koldformet') : ''} · ${$('fyMan').checked ? 'f<sub>y</sub> ' + f(num('fyVal'), 0) : $('grade').value}</h2>
+    h += `<section class="card noprint"><h2>Serieoversigt · ${ovr.fam}${ovr.mfg ? (ovr.mfg === 'hot' ? ' varmformet' : ' koldformet') : ''} · ${$('fyMan').checked ? 'f<sub>y</sub> ' + f(num('fyVal'), 0) : $('grade').value}</h2>
       <p class="sub">${ovr.rows.length} standardstørrelser. ${isL ? `${n4} er i klasse 4 ved ren tryk${n4 ? `, heraf ${ovr.rows.filter(r => r.cN === 4 && r.aRatio < 1).length} med A<sub>eff</sub> < A` : ''}.` : `${n4} er i klasse 4 ved ren tryk og ${m4} ved ren bøjning; ${n3} har klasse 3 i mindst ét tilfælde.`} ${isL ? `Kolonnen „Aktuel N<sub>Ed</sub>“ er klassen ved N<sub>Ed</sub> = ${f(NEd, 1)} kN; ${c4} er i klasse 4.` : `Kolonnen „Kombineret“ er klassen ved N<sub>Ed</sub> = ${f(NEd, 1)} kN og M<sub>y,Ed</sub> = ${f(MEd, 1)} kNm; ${c4} er i klasse 4.`} Vælg en række for at regne profilet.</p>
       <div class="tbl ovwrap"><table><thead><tr><th>Profil</th><th>f<sub>y</sub></th><th>maks c/t</th><th>Ren tryk</th><th>A<sub>eff</sub>/A</th><th>N<sub>c,Rd</sub> [kN]</th><th>Ren bøjning</th><th>W<sub>eff</sub>/W<sub>el</sub></th><th>M<sub>c,y,Rd</sub> [kNm]</th><th>${isL ? 'Aktuel N<sub>Ed</sub>' : 'Kombineret'}</th></tr></thead><tbody>
       ${ovr.rows.map(r => r.na ? `<tr class="pick" tabindex="0" data-key="${r.p.key}" data-id="${ovr.id}"><td>${r.p.key}</td><td colspan="9" class="na">Godstykkelse over 100 mm</td></tr>` :
@@ -1523,7 +1584,7 @@ function render() {
     <li>W<sub>eff</sub> for T-profiler og vinkler måles til det effektive materiales yderfibre. Hvis en ineffektiv del ligger ved den frie kant (T-kroppens underkant eller en vinkels benspids), flytter den yderfiberen, og W<sub>eff</sub> bliver større, end hvis der måles til bruttokanten. Det er et bevidst valg.</li>
     <li>Hvis N og M øges i samme forhold, kan klassen gå fra 3 til 2. Så skifter beregningen fra elastisk (6.2.9.2) til plastisk (6.2.9.1), og udnyttelsen kan falde. Det følger Eurocode. Dobbeltsymmetriske profiler bruger N alene til α, de øvrige forholdsvis last.</li>
     <li>For dobbeltsymmetriske I-profiler og RHS i klasse 1–2 bruges (6.33)–(6.36) hhv. (6.39); for øvrige profiler en eksakt plastisk spændingsblok.</li>
-    <li>Ikke medtaget: forskydning (V<sub>Ed</sub>), shear lag, forskydningsbuling, påført bøjning om z-aksen (M<sub>z,Ed</sub>), reduceret slankhed efter 4.4(4), samt søjle- og kipningsstabilitet. Klasse 4 rør henvises til EN 1993-1-6.</li>
+    <li>Ikke medtaget: forskydning (V<sub>Ed</sub>), shear lag, forskydningsbuling, påført bøjning om z-aksen (M<sub>z,Ed</sub>), reduceret slankhed efter 4.4(4), klasse 3-krop regnet som effektiv klasse 2 (EN 1993-1-1, 5.5.2(11) og 6.2.2.4), samt søjle- og kipningsstabilitet. Klasse 4 rør henvises til EN 1993-1-6.</li>
     <li>Profilmål for IPE, HEA, HEB og HEM samt listen over standard SHS, RHS og CHS er typiske standardværdier. Kontrollér mål og leveringsmulighed mod leverandørens tabel ved projektering. Andre serier kan regnes ved at rette målene.</li>
   </ul></section>`;
 
@@ -1552,15 +1613,15 @@ function overview(gm, NEd, MEd) {
   if (t === 'rolled') { const m = matchPreset('rprof'); if (!m) return null; fam = m.group; list = CAT.rolled.filter(p => p.group === fam); id = 'rprof'; }
   else if (t === 'rhs') { fam = num('r_h') === num('r_b') ? 'SHS' : 'RHS'; list = CAT[fam]; id = 'hprof'; }
   else if (t === 'chs') { fam = 'CHS'; list = CAT.CHS; id = 'cprof'; }
-  else if (t === 'angle') { const m = matchPreset('lprof'); fam = m ? m.group : ($('l_h').value === $('l_b').value ? 'L lige' : 'L ulige'); list = CAT.L.filter(p => p.group === fam); id = 'lprof'; }
+  else if (t === 'angle') { const m = matchPreset('lprof'); fam = m ? m.group : (Math.abs(num('l_h') - num('l_b')) < 1e-9 ? 'L lige' : 'L ulige'); list = CAT.L.filter(p => p.group === fam); id = 'lprof'; }
   else return null;
-  const mfg = t === 'rhs' ? radio('mfg') : '', fyMan = $('fyMan').checked ? num('fyVal') : null, grade = $('grade').value;
-  const key = [fam, mfg, grade, fyMan, gm.g].join('|');
+  const mfg = t === 'rhs' ? radio('mfg') : '', fyMan = $('fyMan').checked ? num('fyVal') : null, grade = $('grade').value, iterate = $('iter').checked;
+  const key = [fam, mfg, grade, fyMan, gm.g, iterate].join('|');
   if (!ovCache[key]) ovCache[key] = list.map(p => {
     const s = t === 'angle' ? Core.buildAngle({ ...p.dims, name: p.key }) : t === 'rolled' ? Core.buildRolledDims({ name: p.key, ...p.dims }) : t === 'rhs' ? Core.buildRHS({ ...p.dims, mfg, name: p.key }) : Core.buildCHS({ ...p.dims, name: p.key });
     const fy = fyMan > 0 ? fyMan : Core.fyTable(grade, s.tmax);
     if (!fy) return { p, na: true };
-    const r = Core.run(s, { fy, gM0: gm.g, NEd: 0, MEd: 0 });
+    const r = Core.run(s, { fy, gM0: gm.g, NEd: 0, MEd: 0, iterate }); // samme ψ-valg som hovedberegningen
     return { p, s, fy, cN: r.cN.cls, cM: r.cM ? r.cM.cls : null, maxct: Math.max(...s.elements.map(e => e.c / e.t)),
       aRatio: r.effN ? r.effN.A / r.G.A : (r.cN.cls < 4 ? 1 : null), wRatio: !r.cM ? null : r.effMp ? r.effMp.Wmin / r.G.Welmin : (r.cM.cls < 4 ? 1 : null), Nc: r.R.NcRd, Mc: r.R.McRd };
   });
@@ -1587,6 +1648,11 @@ $('frm').addEventListener('input', e => { if (!PRESET[e.target.id]) render(); })
 // Tekstfelter er allerede regnet ved 'input'. Ellers tegnes siden om, når feltet mister fokus, og et klik på en knap går tabt
 $('frm').addEventListener('change', e => { if (!PRESET[e.target.id] && e.target.type !== 'text') render(); });
 $('frm').addEventListener('submit', e => e.preventDefault());
+// Udskrift: eftervisningen af den kombinerede klasse kommer med, hvis ingen eftervisning er åben
+let printProof = false;
+window.addEventListener('beforeprint', () => { if (!proof) { proof = 'C'; printProof = true; } render(); });
+window.addEventListener('afterprint', () => { if (printProof) { proof = null; printProof = false; render(); } });
+$('printBtn').addEventListener('click', () => window.print());
 render();
 })();
 </script>
@@ -1604,11 +1670,11 @@ render();
   if (!box) return;
   const local = location.protocol === 'file:';
 
-  // Fingeraftryk: opmærkningen før ver-snap + teksten i alle inline-scripts efter den
-  const fingerprint = (doc, bodyHtml) => {
-    const i = bodyHtml.indexOf('<script id="ver-snap"');
+  // Fingeraftryk: opmærkningen (head + body) før ver-snap + teksten i alle inline-scripts efter den
+  const fingerprint = (doc, html) => {
+    const i = html.indexOf('<script id="ver-snap"');
     if (i < 0) return null;
-    let fp = bodyHtml.slice(0, i), on = false;
+    let fp = html.slice(0, i), on = false;
     for (const sc of doc.body.querySelectorAll('script')) {
       if (sc.id === 'ver-snap') { on = true; continue; }
       if (on && !sc.src) fp += '\n<script>' + sc.textContent;
@@ -1648,7 +1714,7 @@ render();
         const t = await fetch(RAW(commits[k].sha));
         if (!t.ok) throw new Error('raw ' + t.status);
         const doc = new DOMParser().parseFromString(await t.text(), 'text/html');
-        if (fingerprint(doc, doc.body.innerHTML) === mine) { match = k; break; }
+        if (fingerprint(doc, doc.documentElement.innerHTML) === mine) { match = k; break; }
         if (k === 0 && !doc.getElementById('ver-snap')) break; // ældre udgaver har intet versionstjek
       }
       const info = `<b>${esc(newest.pr)}</b> ${esc(newest.title)} <span>(${esc(newest.when)})</span>`;

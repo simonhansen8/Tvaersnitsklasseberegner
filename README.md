@@ -17,3 +17,15 @@ Et værktøj til at bestemme tværsnitsklassen for ståltværsnit efter Eurocode
 - **Kunne ikke tjekkes** (gul): ingen internetforbindelse. Programmet regner stadig som normalt.
 
 Der skal ikke rettes noget versionsnummer i hånden, når en ændring lægges ind.
+
+## Udskrift og PDF
+
+Tryk *Udskriv / gem som PDF* under inputfelterne (eller brug browserens udskriv). Udskriften starter med en oversigt over inddata (profil, mål, materiale, snitkræfter, γ<sub>M0</sub>, dato og programversion) og får altid eftervisningen af tværsnitsklassen med. Serieoversigten udelades.
+
+## Tests
+
+Beregningskernen testes mod profiltabeller og håndregninger (tværsnitskonstanter, tabel 5.2, effektive bredder, interaktion). Testene læser kernen direkte fra `index.html` og køres automatisk på GitHub ved hver ændring. Lokalt (kræver Node.js 18 eller nyere):
+
+```bash
+node --test
+```
