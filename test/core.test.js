@@ -107,3 +107,72 @@ test('standardprofilernes mål giver gyldige tværsnit', () => {
   }
   for (const p of cat.L) assert.ok(p.dims.b > p.dims.t + p.dims.r1 && p.dims.r2 <= p.dims.t, p.key);
 });
+
+test('valsede U-profiler og T-profiler udskåret af I-profiler', () => {
+  const cat = C.catalog(), U = k => cat.U.find(p => p.key === k).dims;
+  let G = C.run(C.buildRolledChannel(U('UPE 200')), { ...S355, NEd: 0, MEd: 0 }).G;
+  near(G.A, 2900, 0.005, 'UPE 200 A'); near(G.Iy, 1910e4, 0.005, 'UPE 200 Iy'); near(G.Iz, 187e4, 0.01, 'UPE 200 Iz');
+  G = C.run(C.buildRolledChannel(U('UPN 200')), { ...S355, NEd: 0, MEd: 0 }).G;
+  near(G.A, 3220, 0.01, 'UPN 200 A'); near(G.Iy, 1910e4, 0.01, 'UPN 200 Iy'); near(G.Iz, 148e4, 0.03, 'UPN 200 Iz');
+  near(G.yc + 75 / 2, 20.1, 0.03, 'UPN 200 tyngdepunkt fra ryg');
+  const half = C.run(C.buildRolledTee(cat.T.find(p => p.key === '½ IPE 400').dims), { ...S355, NEd: 0, MEd: 0 }).G;
+  near(2 * half.A, C.run(C.buildRolled('IPE', 400), { ...S355, NEd: 0, MEd: 0 }).G.A, 1e-9, '2 × ½ IPE 400 = IPE 400');
+  // Huller i det effektive tværsnit følger de hældende flanger: A_eff = A − skraveret areal
+  const r = C.run(C.buildRolledChannel({ h: 400, b: 160, tw: 6, tf: 10, r1: 10, r2: 5, sl: 8 }), { ...S355, NEd: 500e3, MEd: 0 });
+  const area = p => Math.abs(p.reduce((a, q, i) => { const n = p[(i + 1) % p.length]; return a + q[0] * n[1] - n[0] * q[1]; }, 0) / 2);
+  near(r.effN.A, r.G.A - r.effN.holes.reduce((a, p) => a + area(p), 0), 1e-9, 'A_eff');
+});
+
+test('forskydning efter 6.2.6 og 6.2.8', () => {
+  const ipe = C.buildRolled('IPE', 400);
+  let r = C.run(ipe, { ...S355, NEd: 0, MEd: 300e6, VEd: 600e3 });
+  near(r.R.V.Av, 4269, 0.002, 'A_v IPE 400'); near(r.R.V.VplRd, 4269 * 355 / 1.1 / Math.sqrt(3), 0.002, 'V_pl,Rd');
+  near(r.R.V.rho, 0.258, 0.01, 'ρ'); near(r.I.terms.MplV, 397e6, 0.003, 'M_y,V,Rd (6.30)');
+  near(r.I.util, 300e6 / r.I.terms.MplV, 1e-9, 'udnyttelse');
+  // V ≤ 0,5·V_pl,Rd påvirker ikke momentbæreevnen
+  const u0 = C.run(ipe, { ...S355, NEd: 0, MEd: 300e6 }).I.util;
+  assert.equal(C.run(ipe, { ...S355, NEd: 0, MEd: 300e6, VEd: 0.5 * r.R.V.VplRd }).I.util, u0);
+  // Klasse 4: kroppen kontrolleres mod (1 − ρ)f_y, flangerne mod f_y
+  r = C.run(ipe, { ...S355, NEd: 1500e3, MEd: 40e6, VEd: 700e3 });
+  const T = r.I.terms;
+  assert.ok(T.webV > T.sum && T.kY < 1);
+  near(T.webV, (T.tN + T.tM * T.kY) / (1 - T.rho), 1e-12, 'kropsled');
+  // Forskydningsbuling markeres for slanke kroppe
+  assert.equal(C.run(C.buildWelded({ h: 1000, tw: 8, bt: 300, tft: 20, bb: 300, tfb: 20, a: 5 }), { ...S355, NEd: 0, MEd: 0, VEd: 100e3 }).R.V.buckling, true);
+});
+
+test('bøjning om z-aksen (M_z,Ed)', () => {
+  // HEB 300, N = 1000 kN, M_y = 150 kNm, M_z = 60 kNm (håndregning)
+  const r = C.run(C.buildRolled('HEB', 300), { ...S355, NEd: 1000e3, MEd: 150e6, MzEd: 60e6 }), T = r.I.terms;
+  assert.match(r.I.method, /6\.41/);
+  near(T.MNRd, 541.4e6, 0.002, 'M_N,y,Rd'); near(T.MNz, 280.8e6, 0.002, 'M_N,z,Rd'); near(T.ey, 5 * T.n, 1e-12, 'β = 5n');
+  near((150e6 / (T.mu * T.MNRd)) ** 2 + (60e6 / (T.mu * T.MNz)) ** T.ey, 1, 1e-9, '(6.41) ved μ');
+  // Ingen spring, når M_z → 0
+  const ipe = C.buildRolled('IPE', 400);
+  near(C.run(ipe, { ...S355, NEd: 300e3, MEd: 100e6, MzEd: 1e3 }).I.util, C.run(ipe, { ...S355, NEd: 300e3, MEd: 100e6 }).I.util, 1e-4, 'M_z → 0 (β ≈ 1 giver et lineært bidrag fra M_z = 1 Nm)');
+  // Ren M_z: I-kroppen ligger i nullinjen og har intet membrantryk
+  const z = C.run(ipe, { ...S355, NEd: 0, MEd: 0, MzEd: 20e6 });
+  assert.equal(z.cC.els.find(e => e.el.id === 'web').lims, null);
+  near(z.I.util, 20e6 / (z.G.Wplz * z.fyd), 1e-9, 'M_z/M_pl,z');
+  // Kvadratisk SHS: W_eff,z ved ren M_z = W_eff,y ved ren M_y
+  const shs = C.buildRHS({ h: 200, b: 200, t: 5, mfg: 'cold' });
+  near(C.run(shs, { ...S355, NEd: 0, MEd: 0, MzEd: 30e6 }).effZ.Wmin, C.run(shs, { ...S355, NEd: 0, MEd: 30e6 }).effMp.Wmin, 1e-6, 'W_eff,z = W_eff,y');
+  // CHS: det resulterende moment
+  const chs = C.buildCHS({ d: 219.1, t: 10 });
+  near(C.run(chs, { ...S355, NEd: 500e3, MEd: 30e6, MzEd: 40e6 }).I.util, C.run(chs, { ...S355, NEd: 500e3, MEd: 50e6 }).I.util, 1e-9, 'CHS √(My² + Mz²)');
+  // M_z ignoreres for profiler, der ikke er dobbeltsymmetriske
+  assert.equal(C.supportsMz(C.buildTee({ h: 300, tw: 10, b: 250, tf: 15, a: 4 })), false);
+});
+
+test('reduceret slankhed (5.5.2(9)) og effektiv klasse 2 (6.2.2.4)', () => {
+  const ipe = C.buildRolled('IPE', 400);
+  let r = C.run(ipe, { ...S355, NEd: 300e3, MEd: 0, redSl: true });
+  assert.equal(r.cC.cls, 3); assert.equal(r.cC.reduced, true); near(r.I.util, 300e3 / r.G.A / r.fyd, 1e-9, 'elastisk');
+  assert.equal(C.run(ipe, { ...S355, NEd: 2500e3, MEd: 0, redSl: true }).cC.cls, 4); // σ for høj
+  assert.equal(C.run(ipe, { ...S355, NEd: 300e3, MEd: 0 }).cC.cls, 4);                 // kun når valgt
+  // Svejst I 1000×10 / 300×20, ren bøjning (håndregning): z_pl = 345,4 mm, M_pl,eff = 7,442·10⁶ mm³ · f_y/γ_M0
+  const w = C.buildWelded({ h: 1000, tw: 10, bt: 300, tft: 20, bb: 300, tfb: 20, a: 0 });
+  r = C.run(w, { ...S355, NEd: 0, MEd: 2000e6, effCl2: true });
+  assert.equal(r.cM.cls, 3); near(r.R.eff2.zp, 345.4, 0.001, 'z_pl'); near(r.R.McRd, 7.4419e6 * 355 / 1.1, 0.001, 'M_c,Rd');
+  assert.match(r.I.method, /6\.2\.2\.4/); near(r.I.util, 2000e6 / r.R.McRd, 0.001, 'udnyttelse');
+});
