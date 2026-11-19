@@ -147,6 +147,7 @@ button.badge{font:inherit;cursor:pointer;padding:0}
 @media (max-width:620px){.thumbs,.thumbs.two{grid-template-columns:minmax(0,1fr)}}
 .thumb{font:inherit;color:var(--ink);text-align:left;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:8px 10px;display:grid;gap:4px;align-content:start;min-width:0}
 button.thumb{cursor:pointer}
+.linkbtn{font:inherit;color:var(--accent);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline}
 button.thumb:hover{border-color:var(--accent)}
 button.thumb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .thumb.on{border-color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent);background:var(--surface)}
@@ -1499,7 +1500,7 @@ function loadState() {
     else if (el.tagName === 'SELECT') { if ([...el.options].some(o => o.value === v)) el.value = v; }
     else if (typeof v === 'string') el.value = v;
   }
-  if (['G', 'N', 'M', 'Z'].includes(st.view)) view = st.view;
+  if (['G', 'N', 'M', 'Z', 'D'].includes(st.view)) view = st.view;
   Object.keys(PRESET).forEach(matchPreset);
 }
 
@@ -1598,7 +1599,7 @@ const zSide = (sec, Mz) => sec.type === 'channel' ? (Mz < 0 ? 'tryk ved kroppen'
 function pathOf(pts, X, Y) { return 'M' + pts.map(p => X(p[0]).toFixed(2) + ',' + Y(p[1]).toFixed(2)).join('L') + 'Z'; }
 function svgSection(res, eff) {
   const sec = res.sec, G = res.G, isC = sec.type === 'channel', isZ = !!eff && eff === res.effZ, wZ = !isC && res.MzEd !== 0 && sec.type !== 'angle';
-  const H0 = 430, W = 640, H = H0 + (isC ? 185 : wZ ? 150 : 0), top = 46, bot = 40, secH = H0 - top - bot;
+  const dz = isC && !isZ && hasDeltaMz(res), H0 = 430, W = 640, H = H0 + (dz ? 0 : isC ? 185 : wZ ? 150 : 0), top = 46, bot = 40, secH = H0 - top - bot;
   const s = Math.min(250 / sec.bmax, secH / sec.h), cx = 200, z0 = top + (secH - sec.h * s) / 2;
   const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
   let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tværsnit ${sec.name}">
@@ -1661,7 +1662,7 @@ function svgSection(res, eff) {
   const lab = (z, sg, dy) => `<text x="${sg >= 0 ? SX(sg) + 6 : SX(sg) - 6}" y="${Y(z) + dy}" text-anchor="${sg >= 0 ? 'start' : 'end'}" style="fill:var(--ink);font:11px var(--f-mono)">${f(sg, 0)}</text>`;
   out += lab(zH, sT, 4) + lab(zL, sB, 4);
   out += `<text x="${x0}" y="${Y(0) + 26}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
-  if (isC && !isZ) out += svgChannelZ(res, X, Y(0) + 34, isEff);
+  if (isC && !isZ && !dz) out += svgChannelZ(res, X, Y(0) + 34, isEff);
   if (wZ || (isC && isZ)) out += svgWidthZ(res, X, Y(0) + 34, isZ ? eff : null);
   return out + '</svg>';
 }
@@ -1723,6 +1724,95 @@ function svgChannelZ(res, X, y0, isEff) {
   return o;
 }
 
+// C-profil i klasse 4 med ΔM_z = −N_Ed·e_N,y: bøjning om z i (6.44) på det tværsnit, W_z er taget fra.
+// Tegner tværsnittet med e_N,y og tyngdepunkterne, og under det leddene N/A_eff og (M_z,Ed + ΔM_z)/W_z hver for sig og samlet i samme målestok.
+const hasDeltaMz = res => !!(res.sec.type === 'channel' && res.I && res.I.terms && res.I.terms.zD && res.I.terms.eNy != null);
+const sb = (b, s, rest = '') => `${b}<tspan dy="3" font-size="8">${s}</tspan><tspan dy="-3">${rest}</tspan>`;
+function deltaMzInfo(res) {
+  const T = res.I.terms, D = T.zD, mz = !!res.MzEd;
+  const Mlab = mz ? `(${sb('M', 'z,Ed')} + ${sb('ΔM', 'z')})` : sb('ΔM', 'z');
+  const Wlab = D.src === 'el' ? sb('W', 'el,z') : D.src === 'N' ? sb('W', 'z') : sb('W', 'eff,z');
+  const side = T.MzT < 0 ? 'tryk ved kroppen' : 'tryk i flangespidserne';
+  const src = D.src === 'el' ? 'bruttotværsnittet (ingen dele i klasse 4 ved bøjning om z)' : D.src === 'N' ? 'det effektive tværsnit ved ren tryk (valgfri, konservativ regel)' : `det effektive tværsnit ved ren bøjning om z, ${side}`;
+  return { T, D, mz, Mlab, Wlab, side, src };
+}
+function svgDeltaMz(res) {
+  const sec = res.sec, G = res.G, En = res.effN, B = sec.bmax / 2, W = 640, { T, D, mz, Mlab, Wlab } = deltaMzInfo(res);
+  const s = Math.min(320 / sec.bmax, 220 / sec.h), cx = W / 2 - 20, z0 = 54;
+  const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
+  const yc = D.yc, yL = D.yLo, yR = D.yHi, sN = res.NEd / T.Aeff, k = T.MzT / D.Iz;
+  const rows = [
+    { t: `${sb('N', 'Ed', '/A')}<tspan dy="3" font-size="8">eff</tspan><tspan dy="-3"> (A</tspan><tspan dy="3" font-size="8">eff</tspan><tspan dy="-3"> fra ren tryk)</tspan>`, a: sN, b: sN },
+    { t: `${Mlab}/${Wlab}${D.src !== 'el' ? ` (nul i TP<tspan dy="3" font-size="8">${D.src === 'N' ? 'eff,N' : 'eff,z'}</tspan><tspan dy="-3">)</tspan>` : ''}`, a: k * (yL - yc), b: k * (yR - yc) },
+    { t: `Samlet σ<tspan dy="3" font-size="8">x,Ed</tspan><tspan dy="-3"> = 1 + 2 (tryk nedad)</tspan>`, a: sN + k * (yL - yc), b: sN + k * (yR - yc) }];
+  const mx = Math.max(...rows.flatMap(r => [Math.abs(r.a), Math.abs(r.b)]), 1e-9), sc = 48 / mx;
+  const halo = 'paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round';
+  // den bredeste ineffektive del hen over flangen (hullerne ligger ens i over- og underflangen)
+  const hole = D.holes.map(p => [Math.min(...p.map(q => q[0])), Math.max(...p.map(q => q[0]))]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0];
+  let o = `<defs><pattern id="hatchD" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" style="fill:var(--surface)"/><line x1="0" y1="0" x2="0" y2="5" style="stroke:var(--k4);stroke-width:2.2"/></pattern></defs>`;
+  o += `<path d="${sec.shapes.map(sh => pathOf(sh.pts, X, Y)).join('')}" fill-rule="evenodd" style="fill:var(--steel);stroke:var(--steel-edge);stroke-width:1"/>`;
+  for (const hp of D.holes) o += `<path d="${pathOf(hp, X, Y)}" style="fill:url(#hatchD);stroke:var(--k4);stroke-width:1.4"/>`;
+  // mål
+  const yt = Y(sec.h) - 22, xl = X(-B) - 30;
+  o += `<g style="stroke:var(--muted);stroke-width:.8;fill:none"><line x1="${X(-B)}" y1="${yt}" x2="${X(B)}" y2="${yt}"/><line x1="${X(-B)}" y1="${yt - 4}" x2="${X(-B)}" y2="${yt + 4}"/><line x1="${X(B)}" y1="${yt - 4}" x2="${X(B)}" y2="${yt + 4}"/>
+    <line x1="${xl}" y1="${Y(sec.h)}" x2="${xl}" y2="${Y(0)}"/><line x1="${xl - 4}" y1="${Y(sec.h)}" x2="${xl + 4}" y2="${Y(sec.h)}"/><line x1="${xl - 4}" y1="${Y(0)}" x2="${xl + 4}" y2="${Y(0)}"/></g>`;
+  o += `<text x="${X(0)}" y="${yt - 6}" text-anchor="middle" style="fill:var(--muted);font:11px var(--f-mono)">${f(sec.bmax, 0)}</text>`;
+  o += `<text x="${xl - 7}" y="${(Y(sec.h) + Y(0)) / 2}" transform="rotate(-90 ${xl - 7} ${(Y(sec.h) + Y(0)) / 2})" text-anchor="middle" style="fill:var(--muted);font:11px var(--f-mono)">${f(sec.h, 0)}</text>`;
+  // e_N,y: N_Ed virker i TP, A_eff har tyngdepunktet TP_eff,N
+  const xa = X(En.P.yc), xb = X(G.yc), ya = Y(sec.h / 2), xz = X(yc), showZ = D.src !== 'el' && D.src !== 'N' && Math.abs(yc - G.yc) > 1e-3;
+  o += `<g style="stroke:var(--ink);stroke-width:1;fill:none"><line x1="${xa}" y1="${ya}" x2="${xb}" y2="${ya}"/><path d="M${xa + 6},${ya - 3}L${xa},${ya}L${xa + 6},${ya + 3}M${xb - 6},${ya - 3}L${xb},${ya}L${xb - 6},${ya + 3}"/></g>`;
+  o += `<text x="${(xa + xb) / 2}" y="${ya - 7}" text-anchor="middle" style="fill:var(--ink);font:11px var(--f-body);${halo}">e<tspan dy="3" font-size="8">N,y</tspan><tspan dy="-3"> = ${f(Math.abs(En.eNy), 1)}</tspan></text>`;
+  o += `<text x="${xb + 7}" y="${Y(G.zc) + 16}" style="fill:var(--ink);font:11px var(--f-body);${halo}">N<tspan dy="3" font-size="8">Ed</tspan></text>`;
+  // rækker med spændingsdiagrammer
+  let r0 = Y(0) + 58;
+  const parts = [];
+  rows.forEach((r, i) => {
+    const neg = Math.min(r.a, r.b) < 0, up = Math.max(0, -Math.min(r.a, r.b)) * sc + (neg ? 10 : 6), down = Math.max(0, r.a, r.b) * sc, base = r0 + 12 + up;
+    const SY = sg => base + sg * sc;
+    let g = `<text x="${X(-B)}" y="${r0}" style="fill:var(--muted);font:600 11px var(--f-body);${halo}">${i + 1}. ${r.t}</text>`;
+    const poly = (p, q) => { const col = (p[1] + q[1]) / 2 >= 0 ? 'var(--comp)' : 'var(--tens)';
+      return `<polygon points="${X(p[0])},${base} ${X(p[0])},${SY(p[1])} ${X(q[0])},${SY(q[1])} ${X(q[0])},${base}" style="fill:${col};fill-opacity:.18;stroke:${col};stroke-width:1.2"/>`; };
+    g += `<rect x="${X(-B)}" y="${base - 4}" width="${X(B) - X(-B)}" height="4" style="fill:var(--steel);stroke:var(--steel-edge);stroke-width:.6"/>`;
+    if (hole) g += `<rect x="${X(hole[0])}" y="${base - 4}" width="${X(hole[1]) - X(hole[0])}" height="4" style="fill:url(#hatchD);stroke:var(--k4);stroke-width:.8"/>`;
+    if (Math.abs(r.a) > 1e-9 || Math.abs(r.b) > 1e-9) {
+      if (r.a * r.b < 0) { const yy = yL - r.a * (yR - yL) / (r.b - r.a); g += poly([yL, r.a], [yy, 0]) + poly([yy, 0], [yR, r.b]); } else g += poly([yL, r.a], [yR, r.b]);
+    }
+    g += `<line x1="${X(-B) - 8}" y1="${base}" x2="${X(B) + 8}" y2="${base}" style="stroke:var(--ink);stroke-width:1"/>`;
+    const lab = (y, sg, anchor, dx) => `<text x="${X(y) + dx}" y="${sg >= 0 ? SY(sg) + 13 : SY(sg) - 4}" text-anchor="${anchor}" style="fill:var(--ink);font:11px var(--f-mono);${halo}">${f(sg, 0)}</text>`;
+    g += lab(yL, r.a, 'start', 3) + lab(yR, r.b, 'end', -3);
+    g += `<text x="${X(B) + 12}" y="${base + 4}" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
+    parts.push(g);
+    r0 = base + Math.max(down, 6) + 34;
+  });
+  const yEnd = r0 - 28;
+  // lodrette hjælpelinjer: TP_eff,N i tværsnittet, TP og nullinjen for bøjningsleddet hele vejen ned gennem diagrammerne
+  const yTop = Y(sec.h) - 10, yLab = Y(0) + 16, nN = D.src === 'N';
+  o += `<line x1="${xa}" y1="${yTop}" x2="${xa}" y2="${nN ? yEnd : Y(0) + 8}" style="stroke:${nN ? 'var(--k4)' : 'var(--muted)'};stroke-width:1;stroke-dasharray:${nN ? '5 3' : '2 3'}"/>`;
+  o += `<line x1="${xb}" y1="${yTop}" x2="${xb}" y2="${yEnd}" style="stroke:var(--ink);stroke-width:.9;stroke-dasharray:8 3 2 3"/>`;
+  if (showZ) o += `<line x1="${xz}" y1="${yTop}" x2="${xz}" y2="${yEnd}" style="stroke:var(--k4);stroke-width:1.1;stroke-dasharray:5 3"/><circle cx="${xz}" cy="${Y(G.zc)}" r="3.2" style="fill:var(--k4)"/>`;
+  o += `<circle cx="${xa}" cy="${Y(En.P.zc)}" r="3.2" style="${nN ? 'fill:var(--k4)' : 'fill:var(--surface);stroke:var(--muted);stroke-width:1.3'}"/><circle cx="${xb}" cy="${Y(G.zc)}" r="3.2" style="fill:var(--ink)"/>`;
+  const tl = (x, y, col, txt) => `<text x="${x + 4}" y="${y}" style="fill:${col};font:11px var(--f-body);${halo}">${txt}</text>`;
+  o += tl(xa, yLab, nN ? 'var(--k4)' : 'var(--muted)', `TP<tspan dy="3" font-size="8">eff,N</tspan><tspan dy="-3"> (A</tspan><tspan dy="3" font-size="8">eff</tspan><tspan dy="-3">${nN ? ' og W<tspan dy="3" font-size="8">z</tspan><tspan dy="-3">)</tspan>' : ')'}</tspan>`);
+  if (showZ) o += tl(xz, yLab + 14, 'var(--k4)', 'TP<tspan dy="3" font-size="8">eff,z</tspan><tspan dy="-3"> (W</tspan><tspan dy="3" font-size="8">eff,z</tspan><tspan dy="-3">)</tspan>');
+  o += tl(xb, yLab + 28, 'var(--ink)', 'TP');
+  o += parts.join('');
+  return `<svg viewBox="0 0 ${W} ${Math.ceil(yEnd + 12)}" role="img" aria-label="Bøjning om z for ${sec.name}">${o}</svg>`;
+}
+function deltaMzHTML(res) {
+  const En = res.effN, N = res.NEd, { T, D, mz, Mlab, Wlab, side, src } = deltaMzInfo(res), fyd = res.fyd, B = res.sec.bmax / 2;
+  const sN = N / T.Aeff, k = T.MzT / D.Iz, sW = k * (D.yLo - D.yc), sT = k * (D.yHi - D.yc), kNm = v => f(v / 1e6, 1) + ' kNm', pm = v => (v < 0 ? '− ' : '+ ') + f(Math.abs(v), 1);
+  let h = `<p class="hint" style="margin-top:10px">N<sub>Ed</sub> virker i bruttotyngdepunktet TP, men tyngdepunktet for A<sub>eff</sub> ved ren tryk (TP<sub>eff,N</sub>) ligger e<sub>N,y</sub> nærmere kroppen. Det giver tillægsmomentet ΔM<sub>z</sub> med tryk i flangespidserne${mz ? `, som lægges sammen med M<sub>z,Ed</sub> med fortegn` : ''}. Tværsnittet ovenfor er ${src}, som ${Wlab.includes('el,z') ? 'W<sub>el,z</sub>' : 'W<sub>z</sub>'} er taget fra. Diagram 1 og 2 er de to led i (6.44), og diagram 3 er summen. Alle tre er tegnet i samme målestok.</p>
+    <div class="formula" style="margin-top:8px">
+      <div>e<sub>N,y</sub> = y<sub>c</sub>(A<sub>eff</sub>) − y<sub>c</sub> = ${f(En.eNy, 1)} mm</div>
+      <div>ΔM<sub>z</sub> = N<sub>Ed</sub>·|e<sub>N,y</sub>| = ${f(N / 1e3, 1)} kN · ${f(Math.abs(En.eNy), 1)} mm = ${kNm(T.dMz)} (tryk i flangespidserne)</div>
+      ${mz ? `<div>M<sub>z,Ed</sub> + ΔM<sub>z</sub> = ${kNm(res.MzEd)} + ${kNm(T.dMz)} = ${kNm(T.MzT)} (${side})</div>` : ''}
+      <div>I<sub>z</sub> = ${f(D.Iz / 1e6, 2)}·10⁶ mm⁴, y<sub>c</sub> = ${f(D.yc + B, 1)} mm fra kroppens yderside, W = ${f(D.W / 1e3, 1)}·10³ mm³ (mindste)</div>
+      <div>Kroppens yderside: σ = ${f(sN, 1)} ${pm(sW)} = ${f(sN + sW, 1)} MPa</div>
+      <div>${D.yHi < B - 1e-6 ? 'Spidsen af den effektive flange' : 'Flangespidsen'}: σ = ${f(sN, 1)} ${pm(sT)} = ${f(sN + sT, 1)} MPa</div>`;
+  if (T.tN != null && T.tZ != null) h += `<div>Med M<sub>y</sub> i hjørnet (6.44): N/A<sub>eff</sub> + |M<sub>y</sub>|/W<sub>eff,y</sub> + |${mz ? 'M<sub>z,Ed</sub> + ' : ''}ΔM<sub>z</sub>|/W<sub>z</sub> = ${f(T.tN * fyd, 1)} + ${f(T.tM * fyd, 1)} + ${f(T.tZ * fyd, 1)} = <b>${f((T.tN + T.tM + T.tZ) * fyd, 1)} MPa</b></div>`;
+  return h + '</div>';
+}
+
 /* ---------- Brutto- og nettotværsnit: små tegninger ---------- */
 function svgThumb(res, eff) {
   const sec = res.sec, G = res.G, W = 220, H = 180, pad = 14;
@@ -1753,7 +1843,10 @@ function thumbsHTML(res, effM, mNeg) {
   const hasZ = res.cMz != null, Z = res.effZ;
   const zLines = Z ? [`I<sub>eff,z</sub> = ${f(Z.Iz / 1e6, 2)}·10⁶ mm⁴`, `W<sub>eff,z,min</sub> = ${f(Z.Wmin / 1e3, 1)}·10³ mm³ (${f(Z.Wmin / G.Wz * 100, 1)} % af W<sub>el,z</sub>)`] : [];
   const zTxt = isCHS && hasZ && res.cMz.cls === 4 ? 'Klasse 4 rør: beregnes efter EN 1993-1-6' : 'Ingen dele i klasse 4 ved ren bøjning om z.<br>Netto = brutto (W<sub>eff,z</sub> = W<sub>el,z</sub>)';
-  return `<div class="thumbs${isL ? ' two' : ''}">${box('G', 'Bruttotværsnit', null, brutto)}${box('N', 'Nettotværsnit · ren tryk', E, nLines, nTxt)}${isL ? '' : box('M', `Nettotværsnit · ren bøjning (${mNeg ? 'tryk i underside' : 'tryk i overside'})`, effM, mLines, mTxt)}${hasZ ? box('Z', `Nettotværsnit · ren bøjning om z (${zSide(sec, res.MzEd)})`, Z, zLines, zTxt) : ''}</div>`;
+  const dD = hasDeltaMz(res) ? deltaMzInfo(res) : null;
+  const dEff = dD ? { holes: dD.D.holes, P: { yc: dD.D.yc, zc: G.zc } } : null;
+  const dLines = dD ? [`ΔM<sub>z</sub> = N<sub>Ed</sub>·e<sub>N,y</sub> = ${f(Math.abs(dD.T.dMz) / 1e6, 1)} kNm`, ...(dD.mz ? [`M<sub>z,Ed</sub> + ΔM<sub>z</sub> = ${f(dD.T.MzT / 1e6, 1)} kNm`] : []), `${dD.Wlab.replace(/<tspan dy="3" font-size="8">(.*?)<\/tspan><tspan dy="-3"><\/tspan>/, '<sub>$1</sub>')} = ${f(dD.D.W / 1e3, 1)}·10³ mm³`] : [];
+  return `<div class="thumbs${isL ? ' two' : ''}">${box('G', 'Bruttotværsnit', null, brutto)}${box('N', 'Nettotværsnit · ren tryk', E, nLines, nTxt)}${isL ? '' : box('M', `Nettotværsnit · ren bøjning (${mNeg ? 'tryk i underside' : 'tryk i overside'})`, effM, mLines, mTxt)}${hasZ ? box('Z', `Nettotværsnit · ren bøjning om z (${zSide(sec, res.MzEd)})`, Z, zLines, zTxt) : ''}${dD ? box('D', `Nettotværsnit · ${dD.mz ? 'M<sub>z,Ed</sub> + ΔM<sub>z</sub>' : 'ΔM<sub>z</sub>'} om z (${dD.side})`, dEff, dLines) : ''}</div>`;
 }
 
 /* ---------- Eftervisning af tværsnitsklassen, trin for trin ---------- */
@@ -2003,6 +2096,7 @@ function render() {
   if (view === 'N' && !res.effN) view = 'G';
   if (view === 'M' && !effM) view = 'G';
   if (view === 'Z' && !res.effZ) view = 'G';
+  if (view === 'D' && !hasDeltaMz(res)) view = 'G';
 
   // Resumé
   const U = res.I.util, uc = U == null ? 'k3' : U <= 1 ? 'k1' : 'k4';
@@ -2033,8 +2127,9 @@ function render() {
   const eff = view === 'N' ? res.effN : view === 'M' ? effM : view === 'Z' ? res.effZ : null;
   h += `<section class="card"><h2>Brutto- og nettotværsnit</h2><p class="sub">Bruttotværsnittet er hele profilet. Nettotværsnittet (det effektive tværsnit) er bruttotværsnittet minus de skraverede dele, der ikke kan regnes med, fordi de folder (klasse 4, EN 1993-1-5). Kryds = bruttotyngdepunkt, rød prik = nettotyngdepunkt. Vælg et tværsnit for at se det stort med spændinger.</p>
     ${thumbsHTML(res, effM, mNeg)}
-    <h3 style="font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:15px;margin:16px 0 0">${view === 'G' ? 'Bruttotværsnit' : view === 'N' ? 'Nettotværsnit ved ren tryk (A<sub>eff</sub>)' : view === 'Z' ? 'Nettotværsnit ved ren bøjning om z (W<sub>eff,z</sub>)' : 'Nettotværsnit ved ren bøjning (W<sub>eff</sub>)'} og spændinger</h3>
-    <div class="svgbox">${svgSection(res, eff)}</div>
+    <h3 style="font-family:var(--f-display);font-stretch:85%;font-weight:700;font-size:15px;margin:16px 0 0">${view === 'G' ? 'Bruttotværsnit' : view === 'N' ? 'Nettotværsnit ved ren tryk (A<sub>eff</sub>)' : view === 'Z' ? 'Nettotværsnit ved ren bøjning om z (W<sub>eff,z</sub>) og spændinger' : view === 'D' ? `Bøjning om z fra ${res.MzEd ? 'M<sub>z,Ed</sub> + ' : ''}ΔM<sub>z</sub> = N<sub>Ed</sub>·e<sub>N,y</sub> og spændinger hen over flangen` : 'Nettotværsnit ved ren bøjning (W<sub>eff</sub>) og spændinger'}${view === 'G' || view === 'N' ? ' og spændinger' : ''}</h3>
+    <div class="svgbox">${view === 'D' ? svgDeltaMz(res) : svgSection(res, eff)}</div>
+    ${view === 'D' ? deltaMzHTML(res) : hasDeltaMz(res) && view !== 'Z' ? `<p class="hint" style="margin-top:8px">Klasse 4 flytter tyngdepunktet ind mod kroppen og giver tillægsmomentet ΔM<sub>z</sub> = N<sub>Ed</sub>·e<sub>N,y</sub> = ${f(Math.abs(res.I.terms.dMz) / 1e6, 1)} kNm om z. Spændingen hen over flangen vises i <button type="button" class="linkbtn" data-v="D">visningen ${res.MzEd ? 'M<sub>z,Ed</sub> + ' : ''}ΔM<sub>z</sub></button>.</p>` : ''}
     <div class="legend"><span><i style="background:var(--steel)"></i>Effektivt materiale</span><span><i style="background:var(--k4-bg);border-color:var(--k4)"></i>Ineffektiv del</span><span><i style="background:var(--comp);opacity:.5;border:0"></i>Tryk</span><span><i style="background:var(--tens);opacity:.5;border:0"></i>Træk</span></div>
   </section>`;
 
