@@ -11,9 +11,9 @@ Et værktøj til at bestemme tværsnitsklassen for ståltværsnit efter Eurocode
 ## Hvad programmet regner
 
 - **Profiler:** valsede I/H (IPE, HEA, HEB, HEM), svejste I, T-profiler (svejste eller udskåret af IPE/HE), C/U-profiler (valsede UPE/UPN eller svejste), RHS/SHS, CHS og L-profiler.
-- **Laster:** N<sub>Ed</sub>, M<sub>y,Ed</sub>, M<sub>z,Ed</sub> (dobbeltsymmetriske profiler) og V<sub>z,Ed</sub>.
+- **Laster:** N<sub>Ed</sub>, M<sub>y,Ed</sub>, M<sub>z,Ed</sub> (dobbeltsymmetriske profiler og C/U-profiler) og V<sub>z,Ed</sub>.
 - **Tværsnitsklasse** efter EN 1993-1-1 tabel 5.2 med trin-for-trin eftervisning, effektive tværsnit efter EN 1993-1-5 og tværsnitsbæreevne efter EN 1993-1-1 6.2 med γ<sub>M0</sub> efter DK NA.
-- **Valgfrie regler:** reduceret slankhed (5.5.2(9)) og effektiv klasse 2 (5.5.2(11), 6.2.2.4).
+- **Valgfrie regler:** reduceret slankhed (5.5.2(9)), effektiv klasse 2 (5.5.2(11), 6.2.2.4) og W<sub>eff,z</sub> fra det effektive tværsnit ved ren tryk for C/U-profiler (konservativt).
 
 Hvad programmet forudsætter og ikke dækker, står nederst på siden under *Forudsætninger*.
 

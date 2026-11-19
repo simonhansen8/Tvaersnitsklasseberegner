@@ -160,8 +160,50 @@ test('bøjning om z-aksen (M_z,Ed)', () => {
   // CHS: det resulterende moment
   const chs = C.buildCHS({ d: 219.1, t: 10 });
   near(C.run(chs, { ...S355, NEd: 500e3, MEd: 30e6, MzEd: 40e6 }).I.util, C.run(chs, { ...S355, NEd: 500e3, MEd: 50e6 }).I.util, 1e-9, 'CHS √(My² + Mz²)');
-  // M_z ignoreres for profiler, der ikke er dobbeltsymmetriske
+  // M_z ignoreres for T-profiler (og usymmetriske I- og L-profiler)
   assert.equal(C.supportsMz(C.buildTee({ h: 300, tw: 10, b: 250, tf: 15, a: 4 })), false);
+});
+
+test('C/U-profiler i klasse 4: M_z,Ed lægges sammen med ΔM_z = N_Ed·|e_N,y| i (6.44)', () => {
+  // Svejst C 360×10 / 500×15, S355, N = 718 kN, M_y = 77 kNm (håndregning: 0,226 + 0,177 + 0,327 = 0,730)
+  const ch = C.buildChannel({ h: 360, tw: 10, b: 500, tf: 15, a: 0 }), L = { ...S355, NEd: 718e3, MEd: 77e6 }, fyd = 355 / 1.1;
+  assert.equal(C.supportsMz(ch), true);
+  const r0 = C.run(ch, L), T0 = r0.I.terms;
+  near(r0.I.util, 0.7304, 0.001, 'udnyttelse uden M_z');
+  near(T0.dMz, 94.73e6, 0.001, 'ΔM_z'); near(T0.Weffz, 898.44e3, 0.001, 'W_eff,z med tryk i flangespidserne');
+  near(C.run(ch, { ...L, MzEd: 1e3 }).I.util, r0.I.util, 1e-5, 'ingen spring, når M_z → 0');
+  // + = tryk i flangespidserne: lægges til ΔM_z
+  const Tp = C.run(ch, { ...L, MzEd: 30e6 }).I.terms;
+  near(Tp.MzT, 124.73e6, 0.001, 'M_z,Ed + ΔM_z'); near(Tp.tZ, 124.73e6 / (898.44e3 * fyd), 0.001, 'z-leddet');
+  assert.ok(C.run(ch, { ...L, MzEd: -T0.dMz }).I.terms.tZ < 1e-9, 'M_z,Ed = −ΔM_z ophæver tillægsmomentet');
+  // − = tryk ved kroppen: flangerne har træk i spidsen (ψ < −1, k_σ = 23,8) og kroppen er klasse 3, så W = W_el,z
+  const rn = C.run(ch, { ...L, MzEd: -150e6 }), Tn = rn.I.terms;
+  assert.equal(rn.cMz.cls, 3); assert.equal(Tn.zSrc, 'el');
+  near(Tn.Weffz, rn.G.Iz / 294.18, 0.001, 'W_el,z til flangespidsen'); near(Tn.tZ, (150e6 - 94.73e6) / (Tn.Weffz * fyd), 0.001, 'z-leddet');
+  // Ren bøjning om z med tryk i spidserne: samme W_eff,z som tillægsmomentet bruger
+  near(C.run(ch, { ...S355, NEd: 0, MEd: 0, MzEd: 50e6 }).effZ.Wmin, 898.44e3, 0.001, 'W_eff,z ved ren M_z');
+  // Valgfri regel: W_z fra det effektive tværsnit ved ren tryk (flangespids 217,5 mm fra ryg, I_z = 49,34·10⁶ mm⁴)
+  const rw = C.run(ch, { ...L, wzN: true });
+  assert.equal(rw.I.terms.zSrc, 'N'); near(rw.I.terms.Weffz, 343.6e3, 0.002, 'W_z fra A_eff-tværsnittet');
+  near(rw.I.util, 0.226 + 0.177 + 94.73e6 / (343.6e3 * fyd), 0.003, 'udnyttelse med den valgfri regel');
+  // Den valgfri regel bruges kun, når den giver et mindre W
+  assert.equal(C.run(ch, { ...L, MzEd: -150e6, wzN: true }).I.terms.zSrc, 'N');
+  near(C.run(C.buildChannel({ h: 300, tw: 8, b: 120, tf: 10, a: 4 }), { ...S355, NEd: 300e3, MEd: 20e6, wzN: true }).I.util,
+    C.run(C.buildChannel({ h: 300, tw: 8, b: 120, tf: 10, a: 4 }), { ...S355, NEd: 300e3, MEd: 20e6 }).I.util, 1e-12, 'ingen klasse 4: reglen virker ikke');
+});
+
+test('C/U-profiler i klasse 1–2: plastisk spændingsblok med skrå nullinje', () => {
+  const U = C.catalog().U.find(p => p.key === 'UPE 200').dims, upe = C.buildRolledChannel(U);
+  let r = C.run(upe, { ...S355, NEd: 0, MEd: 30e6 });
+  assert.ok(r.cC.cls <= 2); near(r.I.util, 30e6 / (r.G.Wpl * r.fyd), 1e-4, 'ren M_y = M_y/M_pl,y');
+  for (const Mz of [5e6, -5e6]) { r = C.run(upe, { ...S355, NEd: 0, MEd: 0, MzEd: Mz }); near(r.I.util, 5e6 / (r.G.Wplz * r.fyd), 1e-4, `ren M_z = ${Mz / 1e6} kNm`); }
+  // Med N: blokkens moment har ingen z-komposant, når M_z,Ed = 0, og der er intet spring, når M_z → 0
+  r = C.run(upe, { ...S355, NEd: 100e3, MEd: 20e6 });
+  assert.ok(Math.abs(r.I.terms.MRz) < 1e-6 * r.I.terms.MRy, 'M_N,z,Rd = 0');
+  near(C.run(upe, { ...S355, NEd: 100e3, MEd: 20e6, MzEd: 1e3 }).I.util, r.I.util, 1e-4, 'M_z → 0');
+  near(C.run(upe, { ...S355, NEd: 100e3, MEd: -20e6 }).I.util, r.I.util, 1e-6, 'symmetri om y-aksen');
+  // Samme klasse i serieoversigten som i hovedberegningen
+  assert.equal(C.combinedClass(upe, { ...S355, NEd: 100e3, MEd: 20e6, MzEd: 5e6 }), C.run(upe, { ...S355, NEd: 100e3, MEd: 20e6, MzEd: 5e6 }).cC.cls);
 });
 
 test('reduceret slankhed (5.5.2(9)) og effektiv klasse 2 (6.2.2.4)', () => {
