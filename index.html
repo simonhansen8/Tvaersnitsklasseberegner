@@ -1598,7 +1598,7 @@ const zSide = (sec, Mz) => sec.type === 'channel' ? (Mz < 0 ? 'tryk ved kroppen'
 function pathOf(pts, X, Y) { return 'M' + pts.map(p => X(p[0]).toFixed(2) + ',' + Y(p[1]).toFixed(2)).join('L') + 'Z'; }
 function svgSection(res, eff) {
   const sec = res.sec, G = res.G, isC = sec.type === 'channel', isZ = !!eff && eff === res.effZ, wZ = !isC && res.MzEd !== 0 && sec.type !== 'angle';
-  const H0 = 430, W = 640, H = H0 + (isC || wZ ? 150 : 0), top = 46, bot = 40, secH = H0 - top - bot;
+  const H0 = 430, W = 640, H = H0 + (isC ? 185 : wZ ? 150 : 0), top = 46, bot = 40, secH = H0 - top - bot;
   const s = Math.min(250 / sec.bmax, secH / sec.h), cx = 200, z0 = top + (secH - sec.h * s) / 2;
   const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
   let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tværsnit ${sec.name}">
@@ -1704,15 +1704,22 @@ function svgChannelZ(res, X, y0, isEff) {
     else o += poly([yL, sL], [yR, sR]);
   }
   o += `<line x1="${X(-sec.bmax / 2) - 8}" y1="${base}" x2="${X(sec.bmax / 2) + 8}" y2="${base}" style="stroke:var(--ink);stroke-width:1"/>`;
-  o += `<line x1="${X(G.yc)}" y1="${base - 6}" x2="${X(G.yc)}" y2="${base + 6}" style="stroke:var(--ink);stroke-width:1.4"/>`;
-  if (D && Math.abs(yc - G.yc) > 1e-3) o += `<line x1="${X(yc)}" y1="${base - 6}" x2="${X(yc)}" y2="${base + 6}" style="stroke:var(--k4);stroke-width:1.4"/>`;
-  // den bredeste ineffektive del hen over flangen (flangehullerne ligger ens i over- og underflangen)
-  const hy = Z ? Z.holes.map(p => [Math.min(...p.map(q => q[0])), Math.max(...p.map(q => q[0]))]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] : null;
-  if (hy) o += `<line x1="${X(hy[0])}" y1="${base}" x2="${X(hy[1])}" y2="${base}" style="stroke:var(--k4);stroke-width:3;stroke-dasharray:4 2"/>`;
+  // Flangen, som diagrammet står på: effektiv bredde fra det tværsnit, W_z er taget fra (ikke nødvendigvis det, der er tegnet ovenfor).
+  // Den bredeste ineffektive del hen over flangen skraveres (hullerne ligger ens i over- og underflangen)
+  const fb = 6, hole = Z ? Z.holes.map(p => [Math.min(...p.map(q => q[0])), Math.max(...p.map(q => q[0]))]).sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]))[0] : null;
+  o += `<rect x="${X(-sec.bmax / 2)}" y="${base - fb}" width="${X(sec.bmax / 2) - X(-sec.bmax / 2)}" height="${fb}" style="fill:var(--steel);stroke:var(--steel-edge);stroke-width:.8"/>`;
+  if (hole) o += `<rect x="${X(hole[0])}" y="${base - fb}" width="${X(hole[1]) - X(hole[0])}" height="${fb}" style="fill:url(#hatch);stroke:var(--k4);stroke-width:1"/>`;
+  const effTP = D && Math.abs(yc - G.yc) > 1e-3, tl = `style="font:10.5px var(--f-body)"`;
+  o += `<line x1="${X(G.yc)}" y1="${base - fb - 5}" x2="${X(G.yc)}" y2="${base + 5}" style="stroke:var(--ink);stroke-width:1.4"/>`;
+  if (effTP) o += `<line x1="${X(yc)}" y1="${base - fb - 5}" x2="${X(yc)}" y2="${base + 5}" style="stroke:var(--k4);stroke-width:1.4"/>`;
+  o += `<text x="${X(G.yc) + 3}" y="${base - fb - 4}" ${tl} fill="var(--ink)">TP</text>`;
+  if (effTP) o += `<text x="${X(yc) - 3}" y="${base - fb - 4}" text-anchor="end" ${tl} fill="var(--k4)">TP<tspan dy="3" font-size="8">${D.src === 'N' ? 'eff' : 'eff,z'}</tspan></text>`;
   const lab = (y, sg, anchor, dx) => `<text x="${X(y) + dx}" y="${SY(sg) + (sg >= 0 ? 13 : -5)}" text-anchor="${anchor}" style="fill:var(--ink);font:11px var(--f-mono)">${f(sg, 0)}</text>`;
   o += lab(yL, sL, 'start', 3) + lab(yR, sR, 'end', -3);
   o += `<text x="${X(sec.bmax / 2) + 12}" y="${base + 4}" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
   if (D && T.tZ != null && T.tN != null) o += `<text x="320" y="${base + 82}" text-anchor="middle" style="fill:var(--ink);font:11px var(--f-body)">Største samlede spænding (hjørne): N/A<tspan dy="3" font-size="8">eff</tspan><tspan dy="-3"> + |M</tspan><tspan dy="3" font-size="8">y</tspan><tspan dy="-3">|/W</tspan><tspan dy="3" font-size="8">eff,y</tspan><tspan dy="-3"> + |${T.zComb ? 'M</tspan><tspan dy="3" font-size="8">z,Ed</tspan><tspan dy="-3"> + ' : ''}ΔM</tspan><tspan dy="3" font-size="8">z</tspan><tspan dy="-3">|/W</tspan><tspan dy="3" font-size="8">eff,z</tspan><tspan dy="-3"> = ${f((T.tN + T.tM + T.tZ) * res.fyd, 0)} MPa</tspan></text>`;
+  if (Z) o += `<text x="320" y="${base + 98}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">${Z.src === 'N' ? 'Flangen er vist med effektiv bredde ved ren tryk (valgfri regel for W<tspan dy="3" font-size="8">z</tspan><tspan dy="-3">)</tspan>' : `Flangen er vist med effektiv bredde ved ren bøjning om z, ${T.MzT < 0 ? 'tryk ved kroppen' : 'tryk i flangespidserne'} (W<tspan dy="3" font-size="8">eff,z</tspan><tspan dy="-3">)</tspan>`}</text>
+    <text x="320" y="${base + 112}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">N/A<tspan dy="3" font-size="8">eff</tspan><tspan dy="-3"> fra ren tryk + ${T.zComb ? '(M</tspan><tspan dy="3" font-size="8">z,Ed</tspan><tspan dy="-3"> + ΔM</tspan><tspan dy="3" font-size="8">z</tspan><tspan dy="-3">)' : 'ΔM</tspan><tspan dy="3" font-size="8">z</tspan><tspan dy="-3">'}/W</tspan><tspan dy="3" font-size="8">z</tspan><tspan dy="-3">, jf. (6.44)</tspan></text>`;
   return o;
 }
 
