@@ -170,6 +170,8 @@ test('C/U-profiler i klasse 4: M_z,Ed lægges sammen med ΔM_z = N_Ed·|e_N,y| i
   assert.equal(C.supportsMz(ch), true);
   const r0 = C.run(ch, L), T0 = r0.I.terms;
   near(r0.I.util, 0.7304, 0.001, 'udnyttelse uden M_z');
+  assert.equal(T0.WySrc, 'p'); assert.equal(T0.AeffN, true); // W_eff,y fra ren bøjning med tryk i oversiden, A_eff fra ren tryk
+  near((T0.tN + T0.tM + T0.tZ) * fyd, 235.7, 0.001, 'σ_x,Ed = 73,1 + 57,2 + 105,4 MPa');
   near(T0.dMz, 94.73e6, 0.001, 'ΔM_z'); near(T0.Weffz, 898.44e3, 0.001, 'W_eff,z med tryk i flangespidserne');
   near(C.run(ch, { ...L, MzEd: 1e3 }).I.util, r0.I.util, 1e-5, 'ingen spring, når M_z → 0');
   // + = tryk i flangespidserne: lægges til ΔM_z

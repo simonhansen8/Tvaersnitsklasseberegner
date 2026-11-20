@@ -1380,7 +1380,7 @@ const Core = (() => {
       const Mtot = MEd - NEd * eN;
       const effM = Mtot >= 0 ? effMp : effMn;
       const W = effM ? effM.Wmin : G.Welmin;
-      I.terms = { Aeff, eN, dM: -NEd * eN, Mtot, Weff: W, tN: Math.abs(NEd) / (Aeff * fyd), tM: Math.abs(Mtot) / (W * fyd), rho };
+      I.terms = { Aeff, eN, dM: -NEd * eN, Mtot, Weff: W, WySrc: effM ? (Mtot >= 0 ? 'p' : 'n') : 'el', AeffN: !!comp, tN: Math.abs(NEd) / (Aeff * fyd), tM: Math.abs(Mtot) / (W * fyd), rho };
       if (isCh && ((yShift && comp) || hasMz)) {
         const z = zTerm(comp ? NEd : 0, MzEd);
         Object.assign(I.terms, { eNy: yShift && comp ? effN.eNy : null, dMz: z.dMz, Mz: MzEd, MzT: z.MzT, Weffz: z.d.W, zSrc: z.d.src, zD: z.d, tZ: z.t, zComb: hasMz });
@@ -2056,6 +2056,57 @@ function zTermHTML(T) {
   return `<div>${head}: ${dm}</div>${sum}<div>W = ${f(T.Weffz / 1e3, 1)}·10³ mm³: ${wTxt}</div>`;
 }
 
+/* ---------- Spændingseftervisning efter (6.44): hvert led i MPa, summen og udnyttelsen ét sted ----------
+   Hvert led regnes på sit eget effektive tværsnit og lægges sammen numerisk, som om alle led giver tryk i samme punkt. */
+function stress644(res) {
+  const T = res.I.terms, sec = res.sec, isC = sec.type === 'channel', sub = (b, s) => `${b}<sub>${s}</sub>`;
+  const kNm = v => `${f(v / 1e6, 1)} kNm`, W3 = v => `${f(v / 1e3, 1)}·10³ mm³`;
+  const rows = [];
+  rows.push({ led: `N<sub>Ed</sub>/A<sub>eff</sub>`, kraft: `${f(Math.abs(res.NEd) / 1e3, 1)} kN`, val: `A<sub>eff</sub> = ${f(T.Aeff, 0)} mm²`,
+    src: T.AeffN ? 'effektivt tværsnit ved ren tryk' : 'bruttotværsnit (ingen dele i klasse 4 ved tryk)', t: T.tN });
+  const dM = Math.abs(T.dM) > 1e-6 ? T.dM : 0;
+  rows.push({ led: dM ? `|M<sub>y,Ed</sub> + N<sub>Ed</sub>·e<sub>N</sub>|/W<sub>eff,y</sub>` : `|M<sub>y,Ed</sub>|/W<sub>eff,y</sub>`,
+    kraft: dM ? `${kNm(res.MEd)} ${dM >= 0 ? '+' : '−'} ${kNm(Math.abs(dM))} = ${kNm(T.Mtot)}` : kNm(res.MEd), val: `W<sub>eff,y</sub> = ${W3(T.Weff)}`,
+    src: { p: 'effektivt tværsnit ved ren bøjning om y, tryk i overside', n: 'effektivt tværsnit ved ren bøjning om y, tryk i underside', el: `${sub('W', 'el,y,min')} (ingen dele i klasse 4 ved ren bøjning om y)` }[T.WySrc], t: T.tM });
+  if (T.tZ != null) {
+    const dir = T.MzT >= 0 ? 'tryk i flangespidserne' : 'tryk ved kroppen';
+    rows.push({ led: T.zComb ? `|M<sub>z,Ed</sub> + ΔM<sub>z</sub>|/W<sub>z</sub>` : `|ΔM<sub>z</sub>|/W<sub>z</sub>, ΔM<sub>z</sub> = N<sub>Ed</sub>·|e<sub>N,y</sub>|`,
+      kraft: T.zComb ? `${kNm(T.Mz)} + ${kNm(T.dMz)} = ${kNm(T.MzT)}` : kNm(T.dMz), val: `W<sub>z</sub> = ${W3(T.Weffz)}`,
+      src: { 'Mz+': `effektivt tværsnit ved ren bøjning om z, ${dir}`, Z: `effektivt tværsnit ved ren bøjning om z, ${dir}`,
+        el: `${sub('W', 'el,z')} (ingen dele i klasse 4 ved ren bøjning om z, ${dir})`, N: 'effektivt tværsnit ved ren tryk (valgfri regel)' }[T.zSrc], t: T.tZ });
+  }
+  if (T.tMz != null) rows.push({ led: `|M<sub>z,Ed</sub>|/W<sub>z</sub>`, kraft: kNm(res.MzEd), val: `W<sub>z</sub> = ${W3(T.WeffzM)}`,
+    src: T.WzEff ? 'effektivt tværsnit ved ren bøjning om z' : `${sub('W', 'el,z')} (ingen dele i klasse 4 ved ren bøjning om z)`, t: T.tMz });
+  const sum = rows.reduce((a, r) => a + r.t, 0), sig = sum * res.fyd;
+  // Punktet, hvor leddene virker med samme fortegn
+  const fl = T.Mtot >= 0 ? 'overflangens' : 'underflangens';
+  const where = isC ? (T.tZ != null && Math.abs(T.MzT) > 1e-6 ? (T.MzT >= 0 ? `${fl} spids` : `${T.Mtot >= 0 ? 'overkanten' : 'underkanten'} ved kroppens yderside`) : `${fl} yderfiber`)
+    : (T.tMz != null ? 'det hjørne, hvor alle led giver tryk' : `${T.Mtot >= 0 ? 'overkanten' : 'underkanten'}`);
+  return { rows, sum, sig, where };
+}
+// Resuméet: den spænding, udnyttelsen bygger på, når kontrollen er en spændingskontrol (klasse 3 og 4)
+function sigmaLine(res) {
+  const I = res.I, T = I.terms || {}, fyd = res.fyd, isAngle = res.sec.type === 'angle';
+  let sig = null, txt = '';
+  if (!isAngle && I.method.includes('6.44')) { const S = stress644(res); sig = S.sig; txt = `i ${S.where}, efter (6.44)`; }
+  else if (I.method.includes('6.2.9.2') && T.smax != null) { sig = T.smax; txt = 'største elastiske spænding (6.2.9.2)'; }
+  if (sig == null) return '';
+  const other = I.util != null && I.util > sig / fyd + 1e-9 ? ` Udnyttelsen ovenfor er bestemt af en anden kontrol (fx forskydning eller ren tryk), se Tværsnitsbæreevne.` : '';
+  return `<div class="sig" style="margin-top:6px;font:13px var(--f-mono)">σ<sub>x,Ed</sub> = <b>${f(sig, 1)} MPa</b> ${sig <= fyd + 1e-9 ? '≤' : '>'} f<sub>y</sub>/γ<sub>M0</sub> = ${f(fyd, 1)} MPa <span style="font-family:var(--f-body);color:var(--muted)">(${txt}).${other}</span></div>`;
+}
+function stress644HTML(res) {
+  const S = stress644(res), fyd = res.fyd, I = res.I, U = I.util;
+  const tr = S.rows.map(r => `<tr><td>${r.led}</td><td class="num">${r.kraft}</td><td>${r.val}<br><span class="muted" style="font-size:12px">${r.src}</span></td><td class="num">${f(r.t * fyd, 1)}</td><td class="num">${f(r.t, 3)}</td></tr>`).join('');
+  const gov = U > S.sum + 1e-9 ? `<p class="hint" style="margin-top:6px">Udnyttelsen i resuméet (${f(U * 100, 1)} %) er større end (6.44), fordi en anden kontrol under Tværsnitsbæreevne er bestemmende.</p>` : '';
+  return `<section class="card"><h2>Spændingseftervisning efter (6.44)</h2><p class="sub">Klasse 4: hvert led i EN 1993-1-1, 6.2.9.3, ligning (6.44), som spænding. Summen er σ<sub>x,Ed</sub>, og udnyttelsen er σ<sub>x,Ed</sub>/(f<sub>y</sub>/γ<sub>M0</sub>).</p>
+    <div class="tbl"><table><thead><tr><th>Led i (6.44)</th><th>Snitkraft</th><th>Tværsnitsværdi og tværsnit</th><th>σ [MPa]</th><th>Udnyttelse</th></tr></thead><tbody>${tr}
+    <tr><td colspan="3"><b>σ<sub>x,Ed</sub></b> i ${S.where} (leddene lægges sammen)</td><td class="num"><b>${f(S.sig, 1)}</b></td><td class="num"><b>${f(S.sum, 3)}</b></td></tr>
+    <tr><td colspan="3">f<sub>y</sub>/γ<sub>M0</sub> = ${f(res.fy, 0)}/${f(res.gM0, 3)}</td><td class="num">${f(fyd, 1)}</td><td></td></tr>
+    <tr><td colspan="3"><b>Udnyttelse</b> = σ<sub>x,Ed</sub>/(f<sub>y</sub>/γ<sub>M0</sub>) = ${f(S.sig, 1)}/${f(fyd, 1)}</td><td></td><td class="num"><b>${f(S.sum, 3)}</b></td></tr>
+    </tbody></table></div>
+    <p class="hint" style="margin-top:8px">Hvert led regnes på sit eget effektive tværsnit (EN 1993-1-5, 4.3), så σ<sub>x,Ed</sub> er en kontrolspænding i det punkt, hvor alle led giver tryk. Den kan ikke aflæses på ét enkelt spændingsdiagram.</p>${gov}</section>`;
+}
+
 /* ---------- Bemærkninger i resuméet: valgfrie regler og forskydning ---------- */
 function summaryNotes(res) {
   const n = [], V = res.R.V, I = res.I;
@@ -2138,7 +2189,8 @@ function render() {
       </div>
       <div class="kv"><span><b>f<sub>y</sub></b> ${f(fy, 0)} MPa</span><span><b>ε</b> ${f(res.eps, 4)}</span><span><b>γ<sub>M0</sub></b> ${f(gm.g, 3)}</span><span><b>f<sub>y</sub>/γ<sub>M0</sub></b> ${f(res.fyd, 1)} MPa</span></div>
       <div class="util"><div class="txt"><span>Udnyttelse af tværsnit · ${res.I.method}</span><strong class="${uc.replace('k', 'c')}">${U == null ? 'ikke beregnet' : U === Infinity ? 'over 100 %' : f(U * 100, 1) + ' %'}</strong></div>
-      <div class="bar"><i style="width:${U == null ? 0 : Math.min(U, 1) * 100}%;background:var(--${uc})"></i></div></div>
+      <div class="bar"><i style="width:${U == null ? 0 : Math.min(U, 1) * 100}%;background:var(--${uc})"></i></div>
+      ${sigmaLine(res)}</div>
       ${summaryNotes(res)}
     </div></div></section>`;
 
@@ -2222,6 +2274,7 @@ function render() {
     const g = col(G), en = col(res.effN?.P), ep = col(res.effMp?.P), em = col(res.effMn?.P);
     const rowsP = [['A', 'mm²', 0], ['z<sub>c</sub> fra underkant', 'mm', 1], ['I<sub>y</sub>', '10⁶ mm⁴', 2], ['W<sub>y</sub> overkant', '10³ mm³', 1], ['W<sub>y</sub> underkant', '10³ mm³', 1]];
     const showP = !!res.effMp, showM = !!res.effMn;
+    if (res.I.method.includes('6.44')) h += stress644HTML(res);
     h += `<div class="grid2"><section class="card"><h2>Tværsnitskonstanter</h2><p class="sub">Bruttotværsnit og effektive tværsnit</p><div class="tbl"><table><thead><tr><th></th><th>Enhed</th><th>Brutto</th>${res.effN ? '<th>Eff. tryk</th>' : ''}${showP ? '<th>Eff. M+</th>' : ''}${showM ? '<th>Eff. M−</th>' : ''}</tr></thead><tbody>`;
     rowsP.forEach((r, i) => { h += `<tr><td>${r[0]}</td><td>${r[1]}</td><td class="num">${f(g[i], r[2])}</td>${res.effN ? `<td class="num">${f(en[i], r[2])}</td>` : ''}${showP ? `<td class="num">${f(ep[i], r[2])}</td>` : ''}${showM ? `<td class="num">${f(em[i], r[2])}</td>` : ''}</tr>`; });
     const ncol = 1 + (res.effN ? 1 : 0) + (showP ? 1 : 0) + (showM ? 1 : 0);
@@ -2289,6 +2342,7 @@ function render() {
         ${res.R.V ? `<tr><td>V<sub>pl,z,Rd</sub> = A<sub>v</sub>·(f<sub>y</sub>/√3)/γ<sub>M0</sub>, A<sub>v</sub> = ${f(res.R.V.Av, 0)} mm²</td><td class="num">${f(res.R.V.VplRd / 1e3, 1)} kN</td></tr>` : ''}
       </tbody></table></div>
       <h2 style="margin-top:14px;font-size:14px">Kombineret, klasse ${k}: ${I.method}</h2>
+      ${I.method.includes('6.44') ? `<p class="hint" style="margin-top:6px">σ<sub>x,Ed</sub> = ${f(stress644(res).sig, 1)} MPa. Leddene står i MPa under Spændingseftervisning efter (6.44) ovenfor.</p>` : ''}
       <div class="formula" style="margin-top:6px">${fl}${T.v != null ? `<div>Forskydning (6.17): V<sub>z,Ed</sub>/V<sub>pl,z,Rd</sub> = ${f(VEd, 1)}/${f(res.R.V.VplRd / 1e3, 1)} = ${f(T.v, 3)}${T.v >= I.util - 1e-12 ? ' <b>(bestemmende)</b>' : ''}</div>` : ''}${res.R.V?.buckling ? `<div><b>Forskydningsbuling:</b> h<sub>w</sub>/t<sub>w</sub> = ${f(res.R.V.hw / res.R.V.tw, 1)} > 72ε/η = ${f(res.R.V.lim, 1)} (η = 1,0). Skal eftervises efter EN 1993-1-5, afsnit 5.</div>` : ''}</div></section></div>`;
 
   }
