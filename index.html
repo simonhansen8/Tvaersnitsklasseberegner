@@ -1629,7 +1629,7 @@ const zoneLab = (len, sg) => ({ word: sg >= 0 ? 'tryk' : 'træk', mm: f(Math.abs
 function pathOf(pts, X, Y) { return 'M' + pts.map(p => X(p[0]).toFixed(2) + ',' + Y(p[1]).toFixed(2)).join('L') + 'Z'; }
 function svgSection(res, eff) {
   const sec = res.sec, G = res.G, isC = sec.type === 'channel', isZ = !!eff && eff === res.effZ, wZ = !isC && res.MzEd !== 0 && sec.type !== 'angle';
-  const dz = isC && !isZ && hasDeltaMz(res), H0 = 430, W = 640, H = H0 + (dz ? 0 : isC ? 215 : wZ ? 160 : 0), top = 72, bot = 40, secH = H0 - top - bot;
+  const dz = isC && !isZ && hasDeltaMz(res), H0 = 430, W = 640, H = H0 + (dz ? 0 : isC ? 229 : wZ ? 160 : 0), top = 72, bot = 40, secH = H0 - top - bot;
   const s = Math.min(250 / sec.bmax, secH / sec.h), cx = 200, z0 = top + (secH - sec.h * s) / 2;
   const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
   let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tværsnit ${sec.name}">
@@ -1637,7 +1637,7 @@ function svgSection(res, eff) {
   out += `<path d="${sec.shapes.map(sh => pathOf(sh.pts, X, Y)).join('')}" fill-rule="evenodd" style="fill:var(--steel);stroke:var(--steel-edge);stroke-width:1"/>`;
   if (eff) for (const hpts of eff.holes) out += `<path d="${pathOf(hpts, X, Y)}" style="fill:url(#hatch);stroke:var(--k4);stroke-width:1.4"/>`;
   // dimensioner
-  const xl = X(-sec.bmax / 2) - 34, yt = Y(sec.h) - 18;
+  const xl = X(-sec.bmax / 2) - 44, yt = Y(sec.h) - 18;
   out += `<g style="stroke:var(--muted);stroke-width:.8;fill:none"><line x1="${xl}" y1="${Y(sec.h)}" x2="${xl}" y2="${Y(0)}"/><line x1="${xl - 4}" y1="${Y(sec.h)}" x2="${xl + 4}" y2="${Y(sec.h)}"/><line x1="${xl - 4}" y1="${Y(0)}" x2="${xl + 4}" y2="${Y(0)}"/>
     <line x1="${X(-sec.bmax / 2)}" y1="${yt}" x2="${X(sec.bmax / 2)}" y2="${yt}"/><line x1="${X(-sec.bmax / 2)}" y1="${yt - 4}" x2="${X(-sec.bmax / 2)}" y2="${yt + 4}"/><line x1="${X(sec.bmax / 2)}" y1="${yt - 4}" x2="${X(sec.bmax / 2)}" y2="${yt + 4}"/></g>`;
   out += `<text x="${xl - 7}" y="${(Y(sec.h) + Y(0)) / 2}" transform="rotate(-90 ${xl - 7} ${(Y(sec.h) + Y(0)) / 2})" text-anchor="middle" style="fill:var(--muted);font:11px var(--f-mono)">${f(sec.h, 0)}</text>`;
@@ -1669,6 +1669,23 @@ function svgSection(res, eff) {
     });
     if (eff) out += `<circle cx="${X(eff.yc)}" cy="${Y(eff.zc)}" r="3.2" style="fill:var(--k4)"/>`;
     out += `<circle cx="${X(yc)}" cy="${Y(zc)}" r="3.2" style="fill:var(--ink)"/>`;
+  }
+  // Mål på tyngdepunkternes placering: højden over underkanten (lodret, til venstre) og for C/U og L afstanden fra venstre kant (vandret, under)
+  {
+    const halo = 'paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round';
+    const tk = (x1, y1, x2, y2) => `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+    const ezc = eff && Math.abs(eff.zc - G.zc) > 1e-3 ? eff.zc : null;
+    const vD = (x, z, col) => `<g style="stroke:${col};stroke-width:.8;fill:none">${tk(x, Y(0), x, Y(z))}${tk(x - 4, Y(0), x + 4, Y(0))}${tk(x - 4, Y(z), x + 4, Y(z))}</g>`
+      + `<text x="${x - 5}" y="${(Y(0) + Y(z)) / 2}" transform="rotate(-90 ${x - 5} ${(Y(0) + Y(z)) / 2})" text-anchor="middle" style="fill:${col};font:11px var(--f-mono);${halo}">${f(z, 1)}</text>`;
+    out += vD(X(-sec.bmax / 2) - 10, G.zc, 'var(--ink)');
+    if (ezc != null) out += vD(X(-sec.bmax / 2) - 24, ezc, 'var(--k4)');
+    const ecy = sec.type === 'channel' ? (eff && eff.P ? eff.P.yc : null) : sec.type === 'angle' ? (eff ? eff.yc : null) : null;
+    if (sec.type === 'channel' || sec.type === 'angle') {
+      const hD = (y, yc, col) => `<g style="stroke:${col};stroke-width:.8;fill:none">${tk(X(-sec.bmax / 2), y, X(yc), y)}${tk(X(-sec.bmax / 2), y - 4, X(-sec.bmax / 2), y + 4)}${tk(X(yc), y - 4, X(yc), y + 4)}</g>`
+        + `<text x="${(X(-sec.bmax / 2) + X(yc)) / 2}" y="${y - 3}" text-anchor="middle" style="fill:${col};font:11px var(--f-mono);${halo}">${f(yc + sec.bmax / 2, 1)}</text>`;
+      out += hD(Y(0) + 20, G.yc, 'var(--ink)');
+      if (ecy != null && Math.abs(ecy - G.yc) > 1e-3) out += hD(Y(0) + 34, ecy, 'var(--k4)');
+    }
   }
   // Spændingsdiagram hen over højden: leddene i (6.44) hver for sig og samlet, uanset hvilket tværsnit der er tegnet.
   // Klasse 4: N/A_eff (A_eff fra ren tryk) + (M_y − N·e_N)·(z − z_c)/I på tværsnittet ved ren bøjning i momentets retning (W_eff,y).
@@ -1737,8 +1754,8 @@ function svgSection(res, eff) {
         : `<text x="${xq + 7}" y="${(d > 0 ? ya : yb) + (d > 0 ? -3 : 11)}" style="fill:var(--ink);font:10.5px var(--f-mono)">${t}</text>`;
     }
   }
-  if (isC && !isZ && !dz) out += svgChannelZ(res, X, Y(0) + 34, isEff);
-  if (wZ || (isC && isZ)) out += svgWidthZ(res, X, Y(0) + 34, isZ ? eff : null);
+  if (isC && !isZ && !dz) out += svgChannelZ(res, X, Y(0) + 48, isEff);
+  if (wZ || (isC && isZ)) out += svgWidthZ(res, X, Y(0) + (isC ? 48 : 34), isZ ? eff : null);
   // bredere tegning, når kurverne har mål
   return out.replace(`<svg viewBox="0 0 ${W} ${H}"`, `<svg viewBox="0 0 ${W2} ${H}" style="max-width:${W2}px"`) + '</svg>';
 }
