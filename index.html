@@ -1619,7 +1619,7 @@ function dimChainH(y, xs, labels, col) {
   labels.forEach((t, i) => {
     const a = xs[i], b = xs[i + 1], L = b - a;
     if (L < 16) return;
-    o += `<text x="${(a + b) / 2}" y="${y + 14}" text-anchor="middle" style="fill:${col[i]};font:${L >= 70 ? 11 : 10}px var(--f-mono)">${L >= 70 ? t.word + ' ' : ''}${t.mm}</text>`;
+    o += `<text x="${(a + b) / 2}" y="${y + 14}" text-anchor="middle" style="fill:${col[i]};font:${L >= 70 ? 11 : 10}px var(--f-mono);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round">${L >= 70 ? t.word + ' ' : ''}${t.mm}</text>`;
   });
   return o;
 }
@@ -1685,8 +1685,9 @@ function svgSection(res, eff) {
   if (cols.length === 2) cols.push({ t: 'samlet', zl: zL, zh: zH, b: sN + mB, tp: sN + mT });
   const tens = c => Math.max(0, -Math.min(c.b, c.tp)), comp = c => Math.max(0, c.b, c.tp), mg = 28, gap = 14;
   const padL = c => tens(c) > 1e-9 ? mg : 6, padR = c => comp(c) > 1e-9 ? mg : 6;
-  const last = cols[cols.length - 1], dimZ = last.tp * last.b < -1e-12; // samlet spænding skifter fortegn: mål på tryk- og trækzonen
-  const xs = 390, xe = dimZ ? 590 : 634, fixed = cols.reduce((a, c) => a + padL(c) + padR(c), 0) + (cols.length - 1) * gap;
+  // Mål på den samlede spænding (sidste søjle): højden af tryk- og trækzonen; skifter den fortegn, også nullinjen
+  const last = cols[cols.length - 1], dimZ = last.tp * last.b < -1e-12, dimAny = Math.abs(last.tp) > 1e-9 || Math.abs(last.b) > 1e-9;
+  const xs = 390, xe = dimAny ? 590 : 634, fixed = cols.reduce((a, c) => a + padL(c) + padR(c), 0) + (cols.length - 1) * gap;
   const span = cols.reduce((a, c) => a + tens(c) + comp(c), 0), big = Math.max(...cols.map(c => Math.max(tens(c), comp(c))), 1e-9);
   const sc = Math.min(90 / big, (xe - xs - fixed) / Math.max(span, 1e-9));
   let xc = xs + Math.max(0, (xe - xs - fixed - span * sc) / 2);
@@ -1711,19 +1712,33 @@ function svgSection(res, eff) {
       out += `<text x="${xm}" y="${Y(sec.h / 2) + 5}" text-anchor="middle" style="fill:var(--muted);font:600 15px var(--f-body)">${i === 1 ? '+' : '='}</text>`; }
   });
   out += `<text x="${cols[cols.length - 1].x0}" y="${Y(0) + 26}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
+  if (dimAny && !dimZ) { const z1 = zoneLab(last.zh - last.zl, last.tp + last.b); out += dimChainV(606, [Y(last.zh), Y(last.zl)], [z1], [z1.col]); }
   if (dimZ) { // nullinjen for den samlede spænding og højden af tryk- og trækzonen
     const zz = zeroPt(last.zl, last.b, last.zh, last.tp), xd = 606, top_ = zoneLab(last.zh - zz, last.tp), bot_ = zoneLab(zz - last.zl, last.b);
     out += `<line x1="${last.x0 - 10}" y1="${Y(zz)}" x2="${xd + 4}" y2="${Y(zz)}" style="stroke:var(--muted);stroke-width:.8;stroke-dasharray:3 2"/>`;
     out += dimChainV(xd, [Y(last.zh), Y(zz), Y(last.zl)], [top_, bot_], [top_.col, bot_.col]);
     out += `<text x="${last.x0 - 13}" y="${Y(zz) + 4}" text-anchor="end" style="fill:var(--muted);font:10.5px var(--f-body)">σ = 0</text>`;
+    // Nullinjen tegnet i tværsnittet og målt fra tyngdepunktet, som bøjningsleddet regnes om (TP eller TP_eff,y ved W_eff,y)
+    const xR = X(sec.bmax / 2), xq = xR + 46, d = zz - sZ, ref = effY ? 'TP<tspan dy="3" font-size="8">eff,y</tspan><tspan dy="-3"></tspan>' : 'TP';
+    const refDrawn = Math.abs(sZ - G.zc) < 1e-3 || (eff && !isZ && Math.abs(sZ - eff.zc) < 1e-3);
+    out += `<line x1="${X(-sec.bmax / 2) - 14}" y1="${Y(zz)}" x2="${xq + 4}" y2="${Y(zz)}" style="stroke:var(--muted);stroke-width:.9;stroke-dasharray:3 2"/>`;
+    out += `<text x="${X(-sec.bmax / 2) - 16}" y="${Y(zz) + 4}" text-anchor="end" style="fill:var(--muted);font:10.5px var(--f-body);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round">σ = 0</text>`;
+    if (!refDrawn) out += `<line x1="${X(-sec.bmax / 2) - 14}" y1="${Y(sZ)}" x2="${xq + 4}" y2="${Y(sZ)}" style="stroke:var(--k4);stroke-width:1;stroke-dasharray:5 3"/><text x="${X(-sec.bmax / 2) - 16}" y="${Y(sZ) + 4}" text-anchor="end" style="fill:var(--k4);font:11px var(--f-body);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round">${ref}</text>`;
+    if (Math.abs(d) * s > 2) {
+      const ya = Math.min(Y(sZ), Y(zz)), yb = Math.max(Y(sZ), Y(zz)), L = yb - ya, m = (ya + yb) / 2, t = `${f(Math.abs(d), 0)}`;
+      out += `<g style="stroke:var(--muted);stroke-width:.8;fill:none"><line x1="${xq}" y1="${ya}" x2="${xq}" y2="${yb}"/><line x1="${xq - 4}" y1="${ya}" x2="${xq + 4}" y2="${ya}"/><line x1="${xq - 4}" y1="${yb}" x2="${xq + 4}" y2="${yb}"/></g>`;
+      out += L >= 24 ? `<text x="${xq + 12}" y="${m}" transform="rotate(-90 ${xq + 12} ${m})" text-anchor="middle" style="fill:var(--ink);font:11px var(--f-mono)">${t}</text>`
+        : `<text x="${xq + 7}" y="${(d > 0 ? ya : yb) + (d > 0 ? -3 : 11)}" style="fill:var(--ink);font:10.5px var(--f-mono)">${t}</text>`;
+    }
   }
   if (isC && !isZ && !dz) out += svgChannelZ(res, X, Y(0) + 34, isEff);
   if (wZ || (isC && isZ)) out += svgWidthZ(res, X, Y(0) + 34, isZ ? eff : null);
   return out + '</svg>';
 }
 // M_z,Ed: spænding hen over bredden fra N_Ed og M_z,Ed, tegnet under tværsnittet (effektivt tværsnit ved ren bøjning om z, hvis valgt)
-// Mål hen over bredden, når spændingen skifter fortegn: bredden af tryk- og trækzonen (mm) og et mærke ved σ = 0
+// Mål hen over bredden: bredden af tryk- og trækzonen (mm); hele bredden, hvis spændingen ikke skifter fortegn
 function dimWidth(X, yL, sL, yR, sR, yd) {
+  if (!(sL * sR < 0)) { const z1 = zoneLab(yR - yL, sL + sR); return dimChainH(yd, [X(yL), X(yR)], [z1], [z1.col]); }
   const yy = zeroPt(yL, sL, yR, sR), a = zoneLab(yy - yL, sL), b = zoneLab(yR - yy, sR);
   return dimChainH(yd, [X(yL), X(yy), X(yR)], [a, b], [a.col, b.col]);
 }
@@ -1737,7 +1752,7 @@ function svgWidthZ(res, X, y0, E) {
     return `<polygon points="${X(a[0])},${base} ${X(a[0])},${SY(a[1])} ${X(b[0])},${SY(b[1])} ${X(b[0])},${base}" style="fill:${col};fill-opacity:.18;stroke:${col};stroke-width:1.2"/>`; };
   if (sL * sR < 0) { const yy = yL - sL * (yR - yL) / (sR - sL); o += poly([yL, sL], [yy, 0]) + poly([yy, 0], [yR, sR]); } else o += poly([yL, sL], [yR, sR]);
   o += `<line x1="${X(-B) - 8}" y1="${base}" x2="${X(B) + 8}" y2="${base}" style="stroke:var(--ink);stroke-width:1"/>`;
-  if (sL * sR < 0) o += dimWidth(X, yL, sL, yR, sR, base + Math.max(sL, sR, 0) * sc + 22);
+  o += dimWidth(X, yL, sL, yR, sR, base + Math.max(sL, sR, 0) * sc + 22);
   const lab = (y, sg, anchor, dx) => `<text x="${X(y) + dx}" y="${SY(sg) + (sg >= 0 ? 13 : -5)}" text-anchor="${anchor}" style="fill:var(--ink);font:11px var(--f-mono)">${f(sg, 0)}</text>`;
   o += lab(yL, sL, 'start', 3) + lab(yR, sR, 'end', -3);
   o += `<text x="${X(B) + 12}" y="${base + 4}" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
@@ -1766,7 +1781,7 @@ function svgChannelZ(res, X, y0, isEff) {
     else o += poly([yL, sL], [yR, sR]);
   }
   o += `<line x1="${X(-sec.bmax / 2) - 8}" y1="${base}" x2="${X(sec.bmax / 2) + 8}" y2="${base}" style="stroke:var(--ink);stroke-width:1"/>`;
-  const sh = sL * sR < 0 ? 30 : 0; // plads til målet under diagrammet
+  const sh = Math.abs(sL) > 1e-9 || Math.abs(sR) > 1e-9 ? 30 : 0; // plads til målet under diagrammet
   if (sh) o += dimWidth(X, yL, sL, yR, sR, base + Math.max(sL, sR, 0) * sc + 22);
   // Flangen, som diagrammet står på: effektiv bredde fra det tværsnit, W_z er taget fra (ikke nødvendigvis det, der er tegnet ovenfor).
   // Den bredeste ineffektive del hen over flangen skraveres (hullerne ligger ens i over- og underflangen)
@@ -1841,7 +1856,7 @@ function svgDeltaMz(res) {
       if (r.a * r.b < 0) { const yy = yL - r.a * (yR - yL) / (r.b - r.a); g += poly([yL, r.a], [yy, 0]) + poly([yy, 0], [yR, r.b]); } else g += poly([yL, r.a], [yR, r.b]);
     }
     g += `<line x1="${X(-B) - 8}" y1="${base}" x2="${X(B) + 8}" y2="${base}" style="stroke:var(--ink);stroke-width:1"/>`;
-    const dW = r.a * r.b < 0; // tryk- og trækzonens bredde, når spændingen skifter fortegn
+    const dW = Math.abs(r.a) > 1e-9 || Math.abs(r.b) > 1e-9; // tryk- og trækzonens bredde
     if (dW) g += dimWidth(X, yL, r.a, yR, r.b, base + Math.max(down, 0) + 22);
     const lab = (y, sg, anchor, dx) => `<text x="${X(y) + dx}" y="${sg >= 0 ? SY(sg) + 13 : SY(sg) - 4}" text-anchor="${anchor}" style="fill:var(--ink);font:11px var(--f-mono);${halo}">${f(sg, 0)}</text>`;
     g += lab(yL, r.a, 'start', 3) + lab(yR, r.b, 'end', -3);
