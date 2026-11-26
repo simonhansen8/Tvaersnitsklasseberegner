@@ -1627,12 +1627,32 @@ function dimChainH(y, xs, labels, col) {
 const zeroPt = (a, sa, b, sb) => a - sa * (b - a) / (sb - sa);
 const zoneLab = (len, sg) => ({ word: sg >= 0 ? 'tryk' : 'træk', mm: f(Math.abs(len), 0), col: sg >= 0 ? 'var(--comp)' : 'var(--tens)' });
 function pathOf(pts, X, Y) { return 'M' + pts.map(p => X(p[0]).toFixed(2) + ',' + Y(p[1]).toFixed(2)).join('L') + 'Z'; }
+// Tynde plader (krop, flanger, rørvægge) i meget store eller slanke profiler bliver til hårstreger i skitserne.
+// Tegnemålestokken strækkes derfor lokalt, så hver plade er mindst minPx bred på tegningen. Resten tegnes målfast.
+// Returnerer X(y), Y(z) og om noget er strakt (så tegningen kan markeres som ikke målfast).
+function sketchMap(sec, sFit, minPx, cx, zTop) {
+  const els = sec.elements || [], uniq = a => a.filter((r, i) => a.findIndex(q => Math.abs(q[0] - r[0]) < 1e-9 && Math.abs(q[1] - r[1]) < 1e-9) === i);
+  const by = uniq(els.flatMap(e => e.yRanges || []).concat(sec.type === 'angle' ? [[sec.dims.o, sec.dims.o + sec.dims.t]] : []));
+  const bz = uniq(els.filter(e => e.zRange).map(e => e.zRange));
+  const need = (bands, s) => bands.reduce((t, [a, b]) => t + Math.max(0, minPx - (b - a) * s), 0);
+  let s = sFit(0, 0);
+  if (need(by, s) + need(bz, s) > 0) s = sFit(need(by, s), need(bz, s)); // giv plads til det, plader strækkes
+  const ext = bands => bands.map(([a, b]) => [a, b, Math.max(0, minPx - (b - a) * s)]).filter(x => x[2] > 0);
+  const ey = ext(by), ez = ext(bz), cl = v => Math.max(0, Math.min(1, v));
+  const fy = y => y * s + ey.reduce((t, [a, b, e]) => t + e * (cl((y - a) / (b - a)) - 0.5), 0);
+  const fz = z => z * s + ez.reduce((t, [a, b, e]) => t + e * cl((z - a) / (b - a)), 0);
+  const Hpx = fz(sec.h), z0 = zTop(Hpx);
+  return { s, X: y => cx + fy(y), Y: z => z0 + Hpx - fz(z), warped: ey.length + ez.length > 0 };
+}
+const notToScale = (x, y) => `<text x="${x}" y="${y}" style="fill:var(--muted);font:italic 10.5px var(--f-body)">Tynde plader er tegnet tykkere end målfast</text>`;
 function svgSection(res, eff) {
   const sec = res.sec, G = res.G, isC = sec.type === 'channel', isZ = !!eff && eff === res.effZ, wZ = !isC && res.MzEd !== 0 && sec.type !== 'angle';
   const dz = isC && !isZ && hasDeltaMz(res), H0 = 430, W = 640, H = H0 + (dz ? 0 : isC ? 229 : wZ ? 160 : 0), top = 72, bot = 40, secH = H0 - top - bot;
-  const s = Math.min(250 / sec.bmax, secH / sec.h), cx = 200, z0 = top + (secH - sec.h * s) / 2;
-  const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
-  let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tværsnit ${sec.name}">
+  const M = sketchMap(sec, (ey, ez) => Math.min((250 - ey) / sec.bmax, (secH - ez) / sec.h), 6, 200, hp => top + (secH - hp) / 2);
+  const { s, X, Y } = M, cx = 200;
+  let out = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Tværsnit ${sec.name}">`;
+  if (M.warped) out += notToScale(8, 16);
+  out += `
   <defs><pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" style="fill:var(--surface)"/><line x1="0" y1="0" x2="0" y2="5" style="stroke:var(--k4);stroke-width:2.2"/></pattern></defs>`;
   out += `<path d="${sec.shapes.map(sh => pathOf(sh.pts, X, Y)).join('')}" fill-rule="evenodd" style="fill:var(--steel);stroke:var(--steel-edge);stroke-width:1"/>`;
   if (eff) for (const hpts of eff.holes) out += `<path d="${pathOf(hpts, X, Y)}" style="fill:url(#hatch);stroke:var(--k4);stroke-width:1.4"/>`;
@@ -1645,7 +1665,7 @@ function svgSection(res, eff) {
   // tyngdepunkter
   const xa = X(-sec.bmax / 2) - 14, xb = X(sec.bmax / 2) + 14;
   out += `<line x1="${xa}" y1="${Y(G.zc)}" x2="${xb}" y2="${Y(G.zc)}" style="stroke:var(--ink);stroke-width:.9;stroke-dasharray:8 3 2 3"/>`;
-  out += `<text x="${xb + 4}" y="${Y(G.zc) + (eff && Math.abs(eff.zc - G.zc) * s < 14 && eff.zc > G.zc ? 12 : -3)}" style="fill:var(--ink);font:11px var(--f-body)">TP</text>`;
+  out += `<text x="${xb + 4}" y="${Y(G.zc) + (eff && Math.abs(Y(eff.zc) - Y(G.zc)) < 14 && eff.zc > G.zc ? 12 : -3)}" style="fill:var(--ink);font:11px var(--f-body)">TP</text>`;
   if (eff && Math.abs(eff.zc - G.zc) > 1e-3) {
     out += `<line x1="${xa}" y1="${Y(eff.zc)}" x2="${xb}" y2="${Y(eff.zc)}" style="stroke:var(--k4);stroke-width:1.1;stroke-dasharray:5 3"/>`;
     out += `<text x="${xb + 4}" y="${Y(eff.zc) + (eff.zc > G.zc ? -3 : 12)}" style="fill:var(--k4);font:11px var(--f-body)">TP<tspan dy="3" font-size="8">eff</tspan></text>`;
@@ -1739,7 +1759,7 @@ function svgSection(res, eff) {
   });
   out += `<text x="${cols[cols.length - 1].x0}" y="${Y(0) + 26}" text-anchor="middle" style="fill:var(--muted);font:10.5px var(--f-body)">MPa</text>`;
   const zz0 = dimZ ? zeroPt(last.zl, last.b, last.zh, last.tp) : 0;
-  if (dimZ && Math.abs(zz0 - sZ) * s > 2) { // nullinjen for den samlede spænding tegnet i tværsnittet (ikke når den falder i TP)
+  if (dimZ && Math.abs(Y(zz0) - Y(sZ)) > 2) { // nullinjen for den samlede spænding tegnet i tværsnittet (ikke når den falder i TP)
     const zz = zz0;
     // Nullinjen tegnet i tværsnittet og målt fra tyngdepunktet, som bøjningsleddet regnes om (TP eller TP_eff,y ved W_eff,y)
     const xR = X(sec.bmax / 2), xq = xR + 46, d = zz - sZ, ref = effY ? 'TP<tspan dy="3" font-size="8">eff,y</tspan><tspan dy="-3"></tspan>' : 'TP';
@@ -1747,7 +1767,7 @@ function svgSection(res, eff) {
     out += `<line x1="${X(-sec.bmax / 2) - 14}" y1="${Y(zz)}" x2="${xq + 4}" y2="${Y(zz)}" style="stroke:var(--muted);stroke-width:.9;stroke-dasharray:3 2"/>`;
     out += `<text x="${X(-sec.bmax / 2) + 3}" y="${Y(zz) - 3}" style="fill:var(--muted);font:10.5px var(--f-body);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round">σ = 0</text>`;
     if (!refDrawn) out += `<line x1="${X(-sec.bmax / 2) - 14}" y1="${Y(sZ)}" x2="${xq + 4}" y2="${Y(sZ)}" style="stroke:var(--k4);stroke-width:1;stroke-dasharray:5 3"/><text x="${X(-sec.bmax / 2) - 16}" y="${Y(sZ) + 4}" text-anchor="end" style="fill:var(--k4);font:11px var(--f-body);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round">${ref}</text>`;
-    if (Math.abs(d) * s > 2) {
+    if (Math.abs(Y(zz) - Y(sZ)) > 2) {
       const ya = Math.min(Y(sZ), Y(zz)), yb = Math.max(Y(sZ), Y(zz)), L = yb - ya, m = (ya + yb) / 2, t = `${f(Math.abs(d), 0)}`;
       out += `<g style="stroke:var(--muted);stroke-width:.8;fill:none"><line x1="${xq}" y1="${ya}" x2="${xq}" y2="${yb}"/><line x1="${xq - 4}" y1="${ya}" x2="${xq + 4}" y2="${ya}"/><line x1="${xq - 4}" y1="${yb}" x2="${xq + 4}" y2="${yb}"/></g>`;
       out += L >= 24 ? `<text x="${xq + 12}" y="${m}" transform="rotate(-90 ${xq + 12} ${m})" text-anchor="middle" style="fill:var(--ink);font:11px var(--f-mono)">${t}</text>`
@@ -1840,8 +1860,7 @@ function deltaMzInfo(res) {
 }
 function svgDeltaMz(res) {
   const sec = res.sec, G = res.G, En = res.effN, B = sec.bmax / 2, W = 640, { T, D, mz, Mlab, Wlab } = deltaMzInfo(res);
-  const s = Math.min(320 / sec.bmax, 220 / sec.h), cx = W / 2 - 20, z0 = 54;
-  const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
+  const M = sketchMap(sec, (ey, ez) => Math.min((320 - ey) / sec.bmax, (220 - ez) / sec.h), 6, W / 2 - 20, () => 54), { X, Y } = M;
   const yc = D.yc, yL = D.yLo, yR = D.yHi, sN = res.NEd / T.Aeff, k = T.MzT / D.Iz;
   const rows = [
     { t: `${sb('N', 'Ed', '/A')}<tspan dy="3" font-size="8">eff</tspan><tspan dy="-3"> (A</tspan><tspan dy="3" font-size="8">eff</tspan><tspan dy="-3"> fra ren tryk)</tspan>`, a: sN, b: sN },
@@ -1900,6 +1919,7 @@ function svgDeltaMz(res) {
   if (showZ) o += tl(xz, yLab + 14, 'var(--k4)', 'TP<tspan dy="3" font-size="8">eff,z</tspan><tspan dy="-3"> (W</tspan><tspan dy="3" font-size="8">eff,z</tspan><tspan dy="-3">)</tspan>');
   o += tl(xb, yLab + 28, 'var(--ink)', 'TP');
   o += parts.join('');
+  if (M.warped) o += notToScale(8, 16);
   return `<svg viewBox="0 0 ${W} ${Math.ceil(yEnd + 12)}" role="img" aria-label="Bøjning om z for ${sec.name}">${o}</svg>`;
 }
 function deltaMzHTML(res) {
@@ -1927,9 +1947,8 @@ function sigma644Note(res) {
 /* ---------- Brutto- og nettotværsnit: små tegninger ---------- */
 function svgThumb(res, eff) {
   const sec = res.sec, G = res.G, W = 220, H = 180, pad = 14;
-  const s = Math.min((W - 2 * pad) / sec.bmax, (H - 2 * pad) / sec.h), cx = W / 2, z0 = (H - sec.h * s) / 2;
-  const X = y => cx + y * s, Y = z => z0 + (sec.h - z) * s;
-  let o = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs><pattern id="hatchT" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" style="fill:var(--surface)"/><line x1="0" y1="0" x2="0" y2="4" style="stroke:var(--k4);stroke-width:1.8"/></pattern></defs>`;
+  const M = sketchMap(sec, (ey, ez) => Math.min((W - 2 * pad - ey) / sec.bmax, (H - 2 * pad - ez) / sec.h), 4, W / 2, hp => (H - hp) / 2), { X, Y } = M;
+  let o = `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${M.warped ? '<title>Tynde plader er tegnet tykkere end målfast</title>' : ''}<defs><pattern id="hatchT" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" style="fill:var(--surface)"/><line x1="0" y1="0" x2="0" y2="4" style="stroke:var(--k4);stroke-width:1.8"/></pattern></defs>`;
   o += `<path d="${sec.shapes.map(sh => pathOf(sh.pts, X, Y)).join('')}" fill-rule="evenodd" style="fill:var(--steel);stroke:var(--steel-edge);stroke-width:1"/>`;
   if (eff) for (const hp of eff.holes) o += `<path d="${pathOf(hp, X, Y)}" style="fill:url(#hatchT);stroke:var(--k4);stroke-width:1.1"/>`;
   const cross = (y, z, col) => `<g style="stroke:${col};stroke-width:1.3"><line x1="${X(y) - 6}" y1="${Y(z)}" x2="${X(y) + 6}" y2="${Y(z)}"/><line x1="${X(y)}" y1="${Y(z) - 6}" x2="${X(y)}" y2="${Y(z) + 6}"/></g>`;
